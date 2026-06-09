@@ -1,0 +1,52 @@
+aws_region   = "us-east-2"
+project_name = "absencesbo"
+environment  = "experimental"
+
+# Prefer SSM Session Manager for dev access.
+# Enable SSH only if you really need it.
+require_ssh_key_pair = false
+create_ssh_key_pair  = false
+key_pair_name        = ""
+
+# Keep administrative access closed by default.
+allowed_ssh_cidrs = []
+allowed_k3s_cidrs = []
+
+# Public web access for the dev application.
+allowed_web_cidrs = ["0.0.0.0/0"]
+
+# Direct NodePort access should be closed by default.
+# The NLB targets app_nodeport internally; external users should normally use HTTP/HTTPS.
+allowed_nodeport_cidrs = []
+
+# Network sizing.
+vpc_cidr           = "10.0.0.0/16"
+public_subnet_cidr = "10.0.1.0/24"
+
+# EC2 sizing.
+instance_type     = "t3.small"
+root_volume_type  = "gp3"
+root_volume_size  = 30
+data_volume_type  = "gp3"
+data_volume_size  = 20
+data_device_name  = "/dev/sdf"
+
+# DNS.
+# Prefer using an existing hosted zone ID.
+route53_zone_id = "ZXXXXXXXXXXXX"
+root_domain_name = "tamayo.dev"
+
+environment_dns_records = [
+  "exp.absencesbo.tamayo.dev"
+]
+
+# TLS certificate for the NLB HTTPS listener.
+# Required while aws_lb_listener.dev_app_https is mandatory.
+acm_certificate_dev_app_arn = "arn:aws:acm:us-east-2:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+
+# k3s service NodePort targeted by the NLB.
+app_nodeport = 32322
+
+tags = {
+  Owner = "dev"
+}
