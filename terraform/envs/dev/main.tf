@@ -227,7 +227,7 @@ resource "aws_lb_target_group" "dev_app" {
   health_check {
     enabled             = true
     protocol            = "HTTP"
-    path = var.app_health_check_path
+    path                = var.app_health_check_path
     port                = tostring(var.app_nodeport)
     healthy_threshold   = 2
     unhealthy_threshold = 2
