@@ -117,17 +117,6 @@ variable "allowed_k3s_cidrs" {
   default     = []
 }
 
-variable "route53_zone_id" {
-  description = "Route53 hosted zone ID for the dev DNS record"
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = length(trimspace(var.route53_zone_id)) > 0
-    error_message = "route53_zone_id must be set for the dev DNS record."
-  }
-}
-
 variable "acm_certificate_dev_app_arn" {
   description = "ACM certificate ARN used by the HTTPS listener"
   type        = string

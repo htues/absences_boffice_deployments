@@ -1,7 +1,3 @@
-locals {
-  create_route53_zone = trimspace(var.route53_zone_id) == ""
-}
-
 resource "aws_route53_zone" "root" {
   count = local.create_route53_zone ? 1 : 0
 

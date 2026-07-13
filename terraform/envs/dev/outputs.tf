@@ -49,8 +49,8 @@ output "ebs_volume_id" {
 }
 
 output "route53_zone_id" {
-  description = "Route53 hosted zone ID used by the dev DNS records"
-  value       = var.route53_zone_id
+  description = "Route53 hosted zone ID sourced from shared state"
+  value       = data.terraform_remote_state.shared.outputs.route53_zone_id
 }
 
 output "route53_record_names" {

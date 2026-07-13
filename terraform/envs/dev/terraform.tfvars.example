@@ -32,8 +32,6 @@ data_volume_size  = 20
 data_device_name  = "/dev/sdf"
 
 # DNS.
-route53_zone_id = "ZXXXXXXXXXXXX"
-
 environment_dns_records = [
   "exp.absencesbo.tamayo.dev"
 ]
