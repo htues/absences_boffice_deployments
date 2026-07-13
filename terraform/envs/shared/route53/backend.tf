@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket       = "absencesbo-terraform-state"
-    key          = "shared/terraform.tfstate"
+    key          = "shared/route53/terraform.tfstate"
     region       = "us-east-2"
     encrypt      = true
     use_lockfile = true
