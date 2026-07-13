@@ -32,9 +32,7 @@ data_volume_size  = 20
 data_device_name  = "/dev/sdf"
 
 # DNS.
-# Prefer using an existing hosted zone ID.
 route53_zone_id = "ZXXXXXXXXXXXX"
-root_domain_name = "tamayo.dev"
 
 environment_dns_records = [
   "exp.absencesbo.tamayo.dev"
