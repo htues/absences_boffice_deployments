@@ -134,44 +134,13 @@ resource "aws_security_group" "dev" {
   })
 }
 
-resource "aws_iam_role" "ec2" {
-  name = "${local.name_prefix}-ec2-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ssm" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "ec2" {
-  name = "${local.name_prefix}-ec2-profile"
-  role = aws_iam_role.ec2.name
-
-  tags = local.common_tags
-}
-
 resource "aws_instance" "dev" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.dev.id]
   associate_public_ip_address = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  iam_instance_profile        = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
 
   depends_on = [aws_route_table_association.public]
 

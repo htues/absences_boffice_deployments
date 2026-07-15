@@ -34,13 +34,13 @@ output "instance_public_dns" {
 }
 
 output "iam_role_name" {
-  description = "IAM role name attached to the EC2 instance"
-  value       = aws_iam_role.ec2.name
+  description = "IAM role name sourced from the shared instance access state"
+  value       = data.terraform_remote_state.shared_instance_access.outputs.iam_role_name
 }
 
 output "iam_instance_profile_name" {
-  description = "IAM instance profile name attached to the EC2 instance"
-  value       = aws_iam_instance_profile.ec2.name
+  description = "IAM instance profile name sourced from the shared instance access state"
+  value       = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
 }
 
 output "ebs_volume_id" {
