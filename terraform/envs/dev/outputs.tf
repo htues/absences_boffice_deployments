@@ -48,21 +48,6 @@ output "ebs_volume_id" {
   value       = aws_ebs_volume.dev_data.id
 }
 
-output "route53_zone_id" {
-  description = "Route53 hosted zone ID sourced from shared state"
-  value       = data.terraform_remote_state.shared.outputs.route53_zone_id
-}
-
-output "route53_record_names" {
-  description = "Route53 DNS record names created for the dev environment"
-  value       = [for record in aws_route53_record.environment : record.fqdn]
-}
-
-output "application_urls" {
-  description = "HTTPS URLs for the dev application DNS records"
-  value       = [for record in aws_route53_record.environment : "https://${record.fqdn}"]
-}
-
 output "load_balancer_dns_name" {
   description = "Public DNS name of the dev application Network Load Balancer"
   value       = aws_lb.dev_app.dns_name

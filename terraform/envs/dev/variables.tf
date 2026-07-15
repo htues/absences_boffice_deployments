@@ -127,22 +127,6 @@ variable "acm_certificate_dev_app_arn" {
   }
 }
 
-variable "environment_dns_records" {
-  description = "DNS names required by the experimental environment"
-  type        = list(string)
-  default = [
-    "exp.absencesbo.tamayo.dev"
-  ]
-
-  validation {
-    condition = alltrue([
-      for dns_name in var.environment_dns_records :
-      can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", dns_name))
-    ])
-    error_message = "environment_dns_records must contain at least one valid DNS name."
-  }
-}
-
 variable "app_nodeport" {
   description = "NodePort exposed by the k3s nginx service and targeted by the AWS Network Load Balancer"
   type        = number
