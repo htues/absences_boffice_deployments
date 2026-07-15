@@ -23,7 +23,7 @@ variable "aws_region" {
 variable "record_names" {
   description = "DNS names that should alias the shared application target"
   type        = list(string)
-  default     = [
+  default = [
     "exp.absencesbo.tamayo.dev"
   ]
 

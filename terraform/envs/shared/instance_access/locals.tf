@@ -9,6 +9,6 @@ locals {
     var.tags
   )
 
-  role_name            = "${var.project_name}-shared-ec2-ssm-role"
+  role_name             = "${var.project_name}-shared-ec2-ssm-role"
   instance_profile_name = "${var.project_name}-shared-ec2-ssm-profile"
 }
