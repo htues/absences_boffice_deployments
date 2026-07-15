@@ -49,18 +49,8 @@ output "ebs_volume_id" {
 }
 
 output "route53_zone_id" {
-  description = "Route53 hosted zone ID used by the dev DNS records"
-  value       = local.effective_route53_zone_id
-}
-
-output "route53_zone_name" {
-  description = "Route53 hosted zone name used by the dev DNS records"
-  value       = var.root_domain_name
-}
-
-output "route53_name_servers" {
-  description = "Name servers for the managed Route53 hosted zone. Empty when using an existing hosted zone ID."
-  value       = local.create_route53_zone ? aws_route53_zone.root[0].name_servers : []
+  description = "Route53 hosted zone ID sourced from shared state"
+  value       = data.terraform_remote_state.shared.outputs.route53_zone_id
 }
 
 output "route53_record_names" {

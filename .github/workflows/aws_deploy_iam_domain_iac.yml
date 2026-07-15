@@ -1,0 +1,243 @@
+name: AWS_DEPLOY_IAM_DOMAIN_IAC
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type 'deploy' to confirm"
+        required: true
+        type: string
+      debug_oidc:
+        description: "Print OIDC token claims to logs (DANGEROUS)"
+        required: false
+        type: boolean
+        default: false
+
+  workflow_call:
+    inputs:
+      confirmation:
+        required: true
+        type: string
+      debug_oidc:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.10.0"
+  TF_IN_AUTOMATION: "true"
+
+  PROJECT_NAME: ${{ vars.APP_NAME || 'absencesbo' }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
+  IAM_STATE_KEY: "shared/iam/terraform.tfstate"
+  ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
+  ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID || '' }}
+
+concurrency:
+  group: AWS_DEPLOY_IAM_DOMAIN_IAC
+  cancel-in-progress: false
+
+jobs:
+  deploy-shared-iac:
+    runs-on: ubuntu-latest
+
+    outputs:
+      iam_policy_arns: ${{ steps.iam_outputs.outputs.policy_arns }}
+      iam_policy_names: ${{ steps.iam_outputs.outputs.policy_names }}
+      iam_policy_role_attachments: ${{ steps.iam_outputs.outputs.policy_role_attachments }}
+      route53_zone_id: ${{ steps.route53_outputs.outputs.route53_zone_id }}
+      route53_zone_name: ${{ steps.route53_outputs.outputs.route53_zone_name }}
+      route53_name_servers: ${{ steps.route53_outputs.outputs.route53_name_servers }}
+
+    steps:
+      - name: Guardrail - confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != "deploy" ]]; then
+            echo "Confirmation failed. You must type 'deploy'."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: (Optional) Debug OIDC token claims
+        if: ${{ inputs.debug_oidc }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+            core.info(`aud=${payload.aud}`);
+            core.info(`sub=${payload.sub}`);
+            core.info(`iss=${payload.iss}`);
+
+      - name: Validate AWS identity + region
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+          CURRENT_REGION="${AWS_DEFAULT_REGION:-$(aws configure get region)}"
+          if [[ "$CURRENT_REGION" != "${AWS_REGION}" ]]; then
+            echo "Wrong region configured: $CURRENT_REGION. Must be ${AWS_REGION}"
+            exit 1
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/route53
+
+      - name: Terraform init - IAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/iam init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.IAM_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - IAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/iam validate
+
+      - name: Terraform apply - IAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/iam apply -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="environment=shared" \
+            -var="managed_by=terraform" \
+            -var="layer=iam"
+
+      - name: Export IAM outputs
+        id: iam_outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/iam
+
+          POLICY_ARNS="$(terraform output -json policy_arns | jq -c '.')"
+          POLICY_NAMES="$(terraform output -json policy_names | jq -c '.')"
+          POLICY_ROLE_ATTACHMENTS="$(terraform output -json policy_role_attachments | jq -c '.')"
+
+          if [[ -z "${POLICY_ARNS}" || -z "${POLICY_NAMES}" || -z "${POLICY_ROLE_ATTACHMENTS}" ]]; then
+            echo "IAM outputs are empty."
+            exit 1
+          fi
+
+          echo "policy_arns=${POLICY_ARNS}" >> "$GITHUB_OUTPUT"
+          echo "policy_names=${POLICY_NAMES}" >> "$GITHUB_OUTPUT"
+          echo "policy_role_attachments=${POLICY_ROLE_ATTACHMENTS}" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init - Route53
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/route53 init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.ROUTE53_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - Route53
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/route53 validate
+
+      - name: Terraform apply - Route53
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/route53 apply -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="route53_zone_id=${{ env.ROUTE53_ZONE_ID }}"
+
+      - name: Export Route53 outputs
+        id: route53_outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/route53
+
+          ROUTE53_ZONE_ID="$(terraform output -raw route53_zone_id)"
+          ROUTE53_ZONE_NAME="$(terraform output -raw route53_zone_name)"
+          ROUTE53_NAME_SERVERS="$(terraform output -json route53_name_servers | jq -r 'join(", ")')"
+
+          if [[ -z "${ROUTE53_ZONE_ID}" ]]; then
+            echo "Route53 zone ID is empty."
+            exit 1
+          fi
+
+          if [[ -z "${ROUTE53_ZONE_NAME}" ]]; then
+            echo "Route53 zone name is empty."
+            exit 1
+          fi
+
+          echo "route53_zone_id=${ROUTE53_ZONE_ID}" >> "$GITHUB_OUTPUT"
+          echo "route53_zone_name=${ROUTE53_ZONE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "route53_name_servers=${ROUTE53_NAME_SERVERS}" >> "$GITHUB_OUTPUT"
+
+      - name: Shared deployment summary
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IAM_POLICY_ARNS='${{ steps.iam_outputs.outputs.policy_arns }}'
+          IAM_POLICY_NAMES='${{ steps.iam_outputs.outputs.policy_names }}'
+          IAM_POLICY_ATTACHMENTS='${{ steps.iam_outputs.outputs.policy_role_attachments }}'
+          ROUTE53_ZONE_ID='${{ steps.route53_outputs.outputs.route53_zone_id }}'
+          ROUTE53_ZONE_NAME='${{ steps.route53_outputs.outputs.route53_zone_name }}'
+          ROUTE53_NAME_SERVERS='${{ steps.route53_outputs.outputs.route53_name_servers }}'
+
+          if [[ -z "${ROUTE53_NAME_SERVERS}" ]]; then
+            ROUTE53_ZONE_SOURCE="existing hosted zone"
+          else
+            ROUTE53_ZONE_SOURCE="newly managed hosted zone"
+          fi
+
+          {
+            echo "### Shared IAM + Route53 Deployment Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "| ---- | ----- |"
+            echo "| Job Status | ${{ job.status }} |"
+            echo "| Project | ${{ env.PROJECT_NAME }} |"
+            echo "| Region | ${{ env.AWS_REGION }} |"
+            echo "| IAM State Key | ${{ env.IAM_STATE_KEY }} |"
+            echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
+            echo "| IAM Policies | ${IAM_POLICY_NAMES} |"
+            echo "| IAM Policy ARNs | ${IAM_POLICY_ARNS} |"
+            echo "| IAM Role Attachments | ${IAM_POLICY_ATTACHMENTS} |"
+            echo "| Route53 Zone Source | ${ROUTE53_ZONE_SOURCE} |"
+            echo "| Route53 Zone ID | ${ROUTE53_ZONE_ID} |"
+            echo "| Route53 Zone Name | ${ROUTE53_ZONE_NAME} |"
+            echo "| Route53 Name Servers | ${ROUTE53_NAME_SERVERS:-N/A} |"
+          } >> "$GITHUB_STEP_SUMMARY"

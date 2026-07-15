@@ -117,12 +117,6 @@ variable "allowed_k3s_cidrs" {
   default     = []
 }
 
-variable "route53_zone_id" {
-  description = "Optional Route53 hosted zone ID for the dev DNS record"
-  type        = string
-  default     = ""
-}
-
 variable "acm_certificate_dev_app_arn" {
   description = "ACM certificate ARN used by the HTTPS listener"
   type        = string
@@ -130,17 +124,6 @@ variable "acm_certificate_dev_app_arn" {
   validation {
     condition     = can(regex("^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-f0-9-]+$", var.acm_certificate_dev_app_arn))
     error_message = "acm_certificate_dev_app_arn must be a valid ACM certificate ARN."
-  }
-}
-
-variable "root_domain_name" {
-  description = "Root DNS domain managed in Route53"
-  type        = string
-  default     = "tamayo.dev"
-
-  validation {
-    condition     = can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", var.root_domain_name))
-    error_message = "root_domain_name must be a valid domain name."
   }
 }
 
