@@ -2,14 +2,7 @@ aws_region   = "us-east-2"
 project_name = "absencesbo"
 environment  = "experimental"
 
-# Prefer SSM Session Manager for dev access.
-# Enable SSH only if you really need it.
-require_ssh_key_pair = false
-create_ssh_key_pair  = false
-key_pair_name        = ""
-
 # Keep administrative access closed by default.
-allowed_ssh_cidrs = []
 allowed_k3s_cidrs = []
 
 # Public web access for the dev application.
