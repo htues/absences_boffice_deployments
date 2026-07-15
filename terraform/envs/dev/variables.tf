@@ -117,16 +117,6 @@ variable "allowed_k3s_cidrs" {
   default     = []
 }
 
-variable "acm_certificate_dev_app_arn" {
-  description = "ACM certificate ARN used by the HTTPS listener"
-  type        = string
-
-  validation {
-    condition     = can(regex("^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-f0-9-]+$", var.acm_certificate_dev_app_arn))
-    error_message = "acm_certificate_dev_app_arn must be a valid ACM certificate ARN."
-  }
-}
-
 variable "app_nodeport" {
   description = "NodePort exposed by the k3s nginx service and targeted by the AWS Network Load Balancer"
   type        = number
@@ -136,12 +126,6 @@ variable "app_nodeport" {
     condition     = var.app_nodeport >= 30000 && var.app_nodeport <= 32767
     error_message = "app_nodeport must be within the Kubernetes NodePort range: 30000-32767."
   }
-}
-
-variable "app_health_check_path" {
-  description = "HTTP path used by the NLB target group health check"
-  type        = string
-  default     = "/healthz"
 }
 
 variable "tags" {

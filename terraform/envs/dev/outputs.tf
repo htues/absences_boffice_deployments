@@ -48,16 +48,6 @@ output "ebs_volume_id" {
   value       = aws_ebs_volume.dev_data.id
 }
 
-output "load_balancer_dns_name" {
-  description = "Public DNS name of the dev application Network Load Balancer"
-  value       = aws_lb.dev_app.dns_name
-}
-
-output "load_balancer_url" {
-  description = "Public HTTP URL of the raw dev Network Load Balancer, mainly for debugging"
-  value       = "http://${aws_lb.dev_app.dns_name}"
-}
-
 output "app_nodeport" {
   description = "NodePort used by the k3s nginx service"
   value       = var.app_nodeport

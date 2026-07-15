@@ -1,16 +1,16 @@
 output "route53_zone_id" {
-  description = "Route53 hosted zone ID for shared DNS"
-  value       = local.effective_route53_zone_id
+  description = "Route53 hosted zone ID sourced from shared Route53 state"
+  value       = data.terraform_remote_state.route53.outputs.route53_zone_id
 }
 
 output "route53_zone_name" {
-  description = "Route53 hosted zone name for shared DNS"
-  value       = var.root_domain_name
+  description = "Route53 hosted zone name sourced from shared Route53 state"
+  value       = data.terraform_remote_state.route53.outputs.route53_zone_name
 }
 
 output "route53_name_servers" {
-  description = "Name servers for the managed Route53 hosted zone. Empty when using an existing hosted zone ID."
-  value       = local.create_route53_zone ? aws_route53_zone.root[0].name_servers : []
+  description = "Name servers for the managed Route53 hosted zone"
+  value       = data.terraform_remote_state.route53.outputs.route53_name_servers
 }
 
 output "route53_record_names" {
@@ -24,11 +24,11 @@ output "application_urls" {
 }
 
 output "load_balancer_dns_name" {
-  description = "DNS name of the discovered application load balancer"
-  value       = data.aws_lb.application.dns_name
+  description = "DNS name of the shared application load balancer"
+  value       = data.terraform_remote_state.load_balancer.outputs.load_balancer_dns_name
 }
 
 output "load_balancer_url" {
-  description = "HTTP URL of the discovered application load balancer"
-  value       = "http://${data.aws_lb.application.dns_name}"
+  description = "HTTP URL of the shared application load balancer"
+  value       = data.terraform_remote_state.load_balancer.outputs.load_balancer_url
 }

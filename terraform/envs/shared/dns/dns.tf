@@ -1,27 +1,35 @@
-data "aws_lb" "application" {
-  name = local.application_load_balancer_name
+data "terraform_remote_state" "route53" {
+  backend = "s3"
+
+  config = {
+    bucket  = "absencesbo-terraform-state"
+    key     = "shared/route53/terraform.tfstate"
+    region  = var.aws_region
+    encrypt = true
+  }
 }
 
-resource "aws_route53_zone" "root" {
-  count = local.create_route53_zone ? 1 : 0
+data "terraform_remote_state" "load_balancer" {
+  backend = "s3"
 
-  name = var.root_domain_name
-
-  tags = merge(local.common_tags, {
-    Name = var.root_domain_name
-  })
+  config = {
+    bucket  = "absencesbo-terraform-state"
+    key     = "shared/load_balancer/terraform.tfstate"
+    region  = var.aws_region
+    encrypt = true
+  }
 }
 
 resource "aws_route53_record" "application" {
   for_each = toset(var.record_names)
 
-  zone_id = local.effective_route53_zone_id
+  zone_id = data.terraform_remote_state.route53.outputs.route53_zone_id
   name    = each.value
   type    = "A"
 
   alias {
-    name                   = data.aws_lb.application.dns_name
-    zone_id                = data.aws_lb.application.zone_id
+    name                   = data.terraform_remote_state.load_balancer.outputs.load_balancer_dns_name
+    zone_id                = data.terraform_remote_state.load_balancer.outputs.load_balancer_zone_id
     evaluate_target_health = true
   }
 }

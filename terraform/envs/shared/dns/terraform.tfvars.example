@@ -1,9 +1,5 @@
-aws_region = "us-east-2"
+aws_region   = "us-east-2"
 project_name = "absencesbo"
-route53_zone_id = ""
-root_domain_name = "tamayo.dev"
-target_environment = "experimental"
-target_component = "dev"
 
 record_names = [
   "exp.absencesbo.tamayo.dev"
