@@ -35,7 +35,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
   BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
   IAM_STATE_KEY: "shared/iam/terraform.tfstate"
-  ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
+  DNS_STATE_KEY: "shared/dns/terraform.tfstate"
   ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID || '' }}
 
 concurrency:
@@ -50,9 +50,9 @@ jobs:
       iam_policy_arns: ${{ steps.iam_snapshot.outputs.policy_arns }}
       iam_policy_names: ${{ steps.iam_snapshot.outputs.policy_names }}
       iam_policy_role_attachments: ${{ steps.iam_snapshot.outputs.policy_role_attachments }}
-      route53_zone_id: ${{ steps.route53_snapshot.outputs.route53_zone_id }}
-      route53_zone_name: ${{ steps.route53_snapshot.outputs.route53_zone_name }}
-      route53_name_servers: ${{ steps.route53_snapshot.outputs.route53_name_servers }}
+      route53_zone_id: ${{ steps.dns_snapshot.outputs.route53_zone_id }}
+      route53_zone_name: ${{ steps.dns_snapshot.outputs.route53_zone_name }}
+      route53_name_servers: ${{ steps.dns_snapshot.outputs.route53_name_servers }}
 
     steps:
       - name: Guardrail - confirmation
@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/route53
+          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/dns
 
       - name: Terraform init - IAM
         shell: bash
@@ -117,13 +117,13 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
 
-      - name: Terraform init - Route53
+      - name: Terraform init - DNS
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/route53 init -reconfigure \
+          terraform -chdir=terraform/envs/shared/dns init -reconfigure \
             -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.ROUTE53_STATE_KEY }}" \
+            -backend-config="key=${{ env.DNS_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
@@ -143,12 +143,12 @@ jobs:
           echo "policy_names=${POLICY_NAMES:-{}}" >> "$GITHUB_OUTPUT"
           echo "policy_role_attachments=${POLICY_ROLE_ATTACHMENTS:-{}}" >> "$GITHUB_OUTPUT"
 
-      - name: Snapshot Route53 outputs
-        id: route53_snapshot
+      - name: Snapshot DNS outputs
+        id: dns_snapshot
         shell: bash
         run: |
           set -euo pipefail
-          cd terraform/envs/shared/route53
+          cd terraform/envs/shared/dns
 
           ROUTE53_ZONE_ID="$(terraform output -raw route53_zone_id 2>/dev/null || true)"
           ROUTE53_ZONE_NAME="$(terraform output -raw route53_zone_name 2>/dev/null || true)"
@@ -158,11 +158,11 @@ jobs:
           echo "route53_zone_name=${ROUTE53_ZONE_NAME}" >> "$GITHUB_OUTPUT"
           echo "route53_name_servers=${ROUTE53_NAME_SERVERS}" >> "$GITHUB_OUTPUT"
 
-      - name: Terraform destroy - Route53
+      - name: Terraform destroy - DNS
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/route53 destroy -auto-approve \
+          terraform -chdir=terraform/envs/shared/dns destroy -auto-approve \
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="route53_zone_id=${{ env.ROUTE53_ZONE_ID }}"
@@ -186,12 +186,12 @@ jobs:
           IAM_POLICY_ARNS='${{ steps.iam_snapshot.outputs.policy_arns }}'
           IAM_POLICY_NAMES='${{ steps.iam_snapshot.outputs.policy_names }}'
           IAM_POLICY_ATTACHMENTS='${{ steps.iam_snapshot.outputs.policy_role_attachments }}'
-          ROUTE53_ZONE_ID='${{ steps.route53_snapshot.outputs.route53_zone_id }}'
-          ROUTE53_ZONE_NAME='${{ steps.route53_snapshot.outputs.route53_zone_name }}'
-          ROUTE53_NAME_SERVERS='${{ steps.route53_snapshot.outputs.route53_name_servers }}'
+          ROUTE53_ZONE_ID='${{ steps.dns_snapshot.outputs.route53_zone_id }}'
+          ROUTE53_ZONE_NAME='${{ steps.dns_snapshot.outputs.route53_zone_name }}'
+          ROUTE53_NAME_SERVERS='${{ steps.dns_snapshot.outputs.route53_name_servers }}'
 
           {
-            echo "### Shared IAM + Route53 Teardown Summary"
+            echo "### Shared IAM + DNS Teardown Summary"
             echo ""
             echo "| Item | Value |"
             echo "| ---- | ----- |"
@@ -199,12 +199,12 @@ jobs:
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Region | ${{ env.AWS_REGION }} |"
             echo "| IAM State Key | ${{ env.IAM_STATE_KEY }} |"
-            echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
+            echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
             echo "| Removed IAM Policies | ${IAM_POLICY_NAMES:-N/A} |"
             echo "| Removed IAM Policy ARNs | ${IAM_POLICY_ARNS:-N/A} |"
             echo "| Removed IAM Role Attachments | ${IAM_POLICY_ATTACHMENTS:-N/A} |"
             echo "| Previous Route53 Zone ID | ${ROUTE53_ZONE_ID:-N/A} |"
             echo "| Previous Route53 Zone Name | ${ROUTE53_ZONE_NAME:-N/A} |"
             echo "| Previous Route53 Name Servers | ${ROUTE53_NAME_SERVERS:-N/A} |"
-            echo "| Result | Shared IAM and Route53 artifacts were destroyed |"
+            echo "| Result | Shared IAM and DNS artifacts were destroyed |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -35,7 +35,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
   BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
   IAM_STATE_KEY: "shared/iam/terraform.tfstate"
-  ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
+  DNS_STATE_KEY: "shared/dns/terraform.tfstate"
   ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID || '' }}
 
 concurrency:
@@ -50,9 +50,9 @@ jobs:
       iam_policy_arns: ${{ steps.iam_outputs.outputs.policy_arns }}
       iam_policy_names: ${{ steps.iam_outputs.outputs.policy_names }}
       iam_policy_role_attachments: ${{ steps.iam_outputs.outputs.policy_role_attachments }}
-      route53_zone_id: ${{ steps.route53_outputs.outputs.route53_zone_id }}
-      route53_zone_name: ${{ steps.route53_outputs.outputs.route53_zone_name }}
-      route53_name_servers: ${{ steps.route53_outputs.outputs.route53_name_servers }}
+      route53_zone_id: ${{ steps.dns_outputs.outputs.route53_zone_id }}
+      route53_zone_name: ${{ steps.dns_outputs.outputs.route53_zone_name }}
+      route53_name_servers: ${{ steps.dns_outputs.outputs.route53_name_servers }}
 
     steps:
       - name: Guardrail - confirmation
@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/route53
+          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/dns
 
       - name: Terraform init - IAM
         shell: bash
@@ -153,38 +153,38 @@ jobs:
           echo "policy_names=${POLICY_NAMES}" >> "$GITHUB_OUTPUT"
           echo "policy_role_attachments=${POLICY_ROLE_ATTACHMENTS}" >> "$GITHUB_OUTPUT"
 
-      - name: Terraform init - Route53
+      - name: Terraform init - DNS
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/route53 init -reconfigure \
+          terraform -chdir=terraform/envs/shared/dns init -reconfigure \
             -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.ROUTE53_STATE_KEY }}" \
+            -backend-config="key=${{ env.DNS_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
 
-      - name: Terraform validate - Route53
+      - name: Terraform validate - DNS
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/route53 validate
+          terraform -chdir=terraform/envs/shared/dns validate
 
-      - name: Terraform apply - Route53
+      - name: Terraform apply - DNS
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/route53 apply -auto-approve \
+          terraform -chdir=terraform/envs/shared/dns apply -auto-approve \
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="route53_zone_id=${{ env.ROUTE53_ZONE_ID }}"
 
-      - name: Export Route53 outputs
-        id: route53_outputs
+      - name: Export DNS outputs
+        id: dns_outputs
         shell: bash
         run: |
           set -euo pipefail
-          cd terraform/envs/shared/route53
+          cd terraform/envs/shared/dns
 
           ROUTE53_ZONE_ID="$(terraform output -raw route53_zone_id)"
           ROUTE53_ZONE_NAME="$(terraform output -raw route53_zone_name)"
@@ -213,9 +213,9 @@ jobs:
           IAM_POLICY_ARNS='${{ steps.iam_outputs.outputs.policy_arns }}'
           IAM_POLICY_NAMES='${{ steps.iam_outputs.outputs.policy_names }}'
           IAM_POLICY_ATTACHMENTS='${{ steps.iam_outputs.outputs.policy_role_attachments }}'
-          ROUTE53_ZONE_ID='${{ steps.route53_outputs.outputs.route53_zone_id }}'
-          ROUTE53_ZONE_NAME='${{ steps.route53_outputs.outputs.route53_zone_name }}'
-          ROUTE53_NAME_SERVERS='${{ steps.route53_outputs.outputs.route53_name_servers }}'
+          ROUTE53_ZONE_ID='${{ steps.dns_outputs.outputs.route53_zone_id }}'
+          ROUTE53_ZONE_NAME='${{ steps.dns_outputs.outputs.route53_zone_name }}'
+          ROUTE53_NAME_SERVERS='${{ steps.dns_outputs.outputs.route53_name_servers }}'
 
           if [[ -z "${ROUTE53_NAME_SERVERS}" ]]; then
             ROUTE53_ZONE_SOURCE="existing hosted zone"
@@ -224,7 +224,7 @@ jobs:
           fi
 
           {
-            echo "### Shared IAM + Route53 Deployment Summary"
+            echo "### Shared IAM + DNS Deployment Summary"
             echo ""
             echo "| Item | Value |"
             echo "| ---- | ----- |"
@@ -232,7 +232,7 @@ jobs:
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Region | ${{ env.AWS_REGION }} |"
             echo "| IAM State Key | ${{ env.IAM_STATE_KEY }} |"
-            echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
+            echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
             echo "| IAM Policies | ${IAM_POLICY_NAMES} |"
             echo "| IAM Policy ARNs | ${IAM_POLICY_ARNS} |"
             echo "| IAM Role Attachments | ${IAM_POLICY_ATTACHMENTS} |"
