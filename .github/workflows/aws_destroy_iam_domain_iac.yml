@@ -35,6 +35,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
   BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
   IAM_STATE_KEY: "shared/iam/terraform.tfstate"
+  INSTANCE_ACCESS_STATE_KEY: "shared/instance_access/terraform.tfstate"
   ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
   LB_STATE_KEY: "shared/load_balancer/terraform.tfstate"
   DNS_STATE_KEY: "shared/dns/terraform.tfstate"
@@ -53,6 +54,8 @@ jobs:
       iam_policy_arns: ${{ steps.iam_snapshot.outputs.policy_arns }}
       iam_policy_names: ${{ steps.iam_snapshot.outputs.policy_names }}
       iam_policy_role_attachments: ${{ steps.iam_snapshot.outputs.policy_role_attachments }}
+      iam_role_name: ${{ steps.instance_access_snapshot.outputs.iam_role_name }}
+      iam_instance_profile_name: ${{ steps.instance_access_snapshot.outputs.iam_instance_profile_name }}
       route53_zone_id: ${{ steps.route53_snapshot.outputs.route53_zone_id }}
       route53_zone_name: ${{ steps.route53_snapshot.outputs.route53_zone_name }}
       route53_name_servers: ${{ steps.route53_snapshot.outputs.route53_name_servers }}
@@ -118,7 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/route53 terraform/envs/shared/load_balancer terraform/envs/shared/dns
+          terraform fmt -check -recursive terraform/envs/shared/iam terraform/envs/shared/instance_access terraform/envs/shared/route53 terraform/envs/shared/load_balancer terraform/envs/shared/dns
 
       - name: Terraform init - IAM
         shell: bash
@@ -127,6 +130,17 @@ jobs:
           terraform -chdir=terraform/envs/shared/iam init -reconfigure \
             -backend-config="bucket=${{ env.BUCKET_NAME }}" \
             -backend-config="key=${{ env.IAM_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform init - Instance Access
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/instance_access init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.INSTANCE_ACCESS_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
@@ -178,6 +192,19 @@ jobs:
           echo "policy_arns=${POLICY_ARNS:-{}}" >> "$GITHUB_OUTPUT"
           echo "policy_names=${POLICY_NAMES:-{}}" >> "$GITHUB_OUTPUT"
           echo "policy_role_attachments=${POLICY_ROLE_ATTACHMENTS:-{}}" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot Instance Access outputs
+        id: instance_access_snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/instance_access
+
+          IAM_ROLE_NAME="$(terraform output -raw iam_role_name 2>/dev/null || true)"
+          IAM_INSTANCE_PROFILE_NAME="$(terraform output -raw iam_instance_profile_name 2>/dev/null || true)"
+
+          echo "iam_role_name=${IAM_ROLE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "iam_instance_profile_name=${IAM_INSTANCE_PROFILE_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Snapshot Route53 outputs
         id: route53_snapshot
@@ -234,6 +261,14 @@ jobs:
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}"
 
+      - name: Terraform destroy - Instance Access
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/instance_access destroy -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}"
+
       - name: Terraform destroy - Load Balancer
         shell: bash
         run: |
@@ -271,6 +306,8 @@ jobs:
           IAM_POLICY_ARNS='${{ steps.iam_snapshot.outputs.policy_arns }}'
           IAM_POLICY_NAMES='${{ steps.iam_snapshot.outputs.policy_names }}'
           IAM_POLICY_ATTACHMENTS='${{ steps.iam_snapshot.outputs.policy_role_attachments }}'
+          IAM_ROLE_NAME='${{ steps.instance_access_snapshot.outputs.iam_role_name }}'
+          IAM_INSTANCE_PROFILE_NAME='${{ steps.instance_access_snapshot.outputs.iam_instance_profile_name }}'
           ROUTE53_ZONE_ID='${{ steps.route53_snapshot.outputs.route53_zone_id }}'
           ROUTE53_ZONE_NAME='${{ steps.route53_snapshot.outputs.route53_zone_name }}'
           ROUTE53_NAME_SERVERS='${{ steps.route53_snapshot.outputs.route53_name_servers }}'
@@ -288,12 +325,15 @@ jobs:
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Region | ${{ env.AWS_REGION }} |"
             echo "| IAM State Key | ${{ env.IAM_STATE_KEY }} |"
+            echo "| Instance Access State Key | ${{ env.INSTANCE_ACCESS_STATE_KEY }} |"
             echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
             echo "| Load Balancer State Key | ${{ env.LB_STATE_KEY }} |"
             echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
             echo "| Removed IAM Policies | ${IAM_POLICY_NAMES:-N/A} |"
             echo "| Removed IAM Policy ARNs | ${IAM_POLICY_ARNS:-N/A} |"
             echo "| Removed IAM Role Attachments | ${IAM_POLICY_ATTACHMENTS:-N/A} |"
+            echo "| Previous IAM Role Name | ${IAM_ROLE_NAME:-N/A} |"
+            echo "| Previous IAM Instance Profile Name | ${IAM_INSTANCE_PROFILE_NAME:-N/A} |"
             echo "| Previous Route53 Zone ID | ${ROUTE53_ZONE_ID:-N/A} |"
             echo "| Previous Route53 Zone Name | ${ROUTE53_ZONE_NAME:-N/A} |"
             echo "| Previous Route53 Name Servers | ${ROUTE53_NAME_SERVERS:-N/A} |"
