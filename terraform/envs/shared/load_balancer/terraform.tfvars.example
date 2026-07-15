@@ -1,0 +1,11 @@
+aws_region = "us-east-2"
+project_name = "absencesbo"
+environment = "shared"
+target_environment = "experimental"
+target_component = "dev"
+app_nodeport = 32322
+acm_certificate_arn = "arn:aws:acm:us-east-2:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+
+tags = {
+  Owner = "platform"
+}
