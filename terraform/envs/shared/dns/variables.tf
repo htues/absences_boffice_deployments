@@ -36,6 +36,15 @@ variable "record_names" {
   }
 }
 
+variable "domain_verification_record" {
+  description = "Domain verification record (CNAME)"
+  type        = map(string)
+  default = {
+    name  = "_d98172c7089c8756135db1835ab212d0.exp.absencesbo.tamayo.dev"
+    value = "_30d9dddeb5fc02660b4454fec3bad374.jkddzztszm.acm-validations.aws"
+  }
+}
+
 variable "tags" {
   description = "Additional tags to apply to all resources"
   type        = map(string)
