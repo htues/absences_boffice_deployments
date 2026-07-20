@@ -101,15 +101,6 @@ jobs:
             exit 1
           fi
 
-      - name: Guardrail - certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "${ACM_CERTIFICATE_ARN}" ]]; then
-            echo "ACM certificate ARN is required for the shared load balancer."
-            exit 1
-          fi
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -255,7 +246,13 @@ jobs:
           set -euo pipefail
           terraform -chdir=terraform/envs/shared/dns destroy -auto-approve \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="aws_region=${{ env.AWS_REGION }}"
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
+            -var="route53_state_region=${{ env.AWS_REGION }}" \
+            -var="lb_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="lb_state_key=${{ env.LB_STATE_KEY }}" \
+            -var="lb_state_region=${{ env.AWS_REGION }}"
 
       - name: Terraform destroy - Load Balancer
         shell: bash
