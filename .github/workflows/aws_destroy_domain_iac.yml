@@ -36,10 +36,10 @@ env:
   BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
   INSTANCE_ACCESS_STATE_KEY: "shared/instance_access/terraform.tfstate"
   ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
+  ACM_STATE_KEY: "shared/acm/terraform.tfstate"
   LB_STATE_KEY: "shared/load_balancer/terraform.tfstate"
   DNS_STATE_KEY: "shared/dns/terraform.tfstate"
   ROUTE53_ZONE_ID: ${{ vars.ROUTE53_ZONE_ID || '' }}
-  ACM_CERTIFICATE_ARN: ${{ vars.ACM_CERTIFICATE_ARN || vars.ACM_CERTIFICATE_DEV_APP_ARN || '' }}
 
 concurrency:
   group: AWS_DESTROY_DOMAIN_IAC
@@ -119,7 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -check -recursive terraform/envs/shared/instance_access terraform/envs/shared/route53 terraform/envs/shared/load_balancer terraform/envs/shared/dns
+          terraform fmt -check -recursive terraform/envs/shared/instance_access terraform/envs/shared/route53 terraform/envs/shared/acm terraform/envs/shared/load_balancer terraform/envs/shared/dns
 
       - name: Terraform init - Instance Access
         shell: bash
@@ -139,6 +139,17 @@ jobs:
           terraform -chdir=terraform/envs/shared/route53 init -reconfigure \
             -backend-config="bucket=${{ env.BUCKET_NAME }}" \
             -backend-config="key=${{ env.ROUTE53_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform init - ACM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/acm init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.ACM_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
@@ -206,6 +217,19 @@ jobs:
           echo "load_balancer_dns_name=${LOAD_BALANCER_DNS_NAME}" >> "$GITHUB_OUTPUT"
           echo "load_balancer_url=${LOAD_BALANCER_URL}" >> "$GITHUB_OUTPUT"
 
+      - name: Snapshot ACM outputs
+        id: acm_snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/acm
+
+          ACM_CERTIFICATE_ARN="$(terraform output -raw acm_certificate_arn 2>/dev/null || true)"
+          ACM_CERTIFICATE_DOMAIN_NAME="$(terraform output -raw acm_certificate_domain_name 2>/dev/null || true)"
+
+          echo "acm_certificate_arn=${ACM_CERTIFICATE_ARN}" >> "$GITHUB_OUTPUT"
+          echo "acm_certificate_domain_name=${ACM_CERTIFICATE_DOMAIN_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Snapshot DNS outputs
         id: dns_snapshot
         shell: bash
@@ -240,7 +264,20 @@ jobs:
           terraform -chdir=terraform/envs/shared/load_balancer destroy -auto-approve \
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="acm_certificate_arn=${{ env.ACM_CERTIFICATE_ARN }}"
+            -var="acm_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="acm_state_key=${{ env.ACM_STATE_KEY }}" \
+            -var="acm_state_region=${{ env.AWS_REGION }}"
+
+      - name: Terraform destroy - ACM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/acm destroy -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
+            -var="route53_state_region=${{ env.AWS_REGION }}"
 
       - name: Terraform destroy - Route53
         shell: bash
@@ -270,6 +307,8 @@ jobs:
           ROUTE53_ZONE_ID='${{ steps.route53_snapshot.outputs.route53_zone_id }}'
           ROUTE53_ZONE_NAME='${{ steps.route53_snapshot.outputs.route53_zone_name }}'
           ROUTE53_NAME_SERVERS='${{ steps.route53_snapshot.outputs.route53_name_servers }}'
+          ACM_CERTIFICATE_ARN='${{ steps.acm_snapshot.outputs.acm_certificate_arn }}'
+          ACM_CERTIFICATE_DOMAIN_NAME='${{ steps.acm_snapshot.outputs.acm_certificate_domain_name }}'
           LOAD_BALANCER_DNS_NAME='${{ steps.lb_snapshot.outputs.load_balancer_dns_name }}'
           LOAD_BALANCER_URL='${{ steps.lb_snapshot.outputs.load_balancer_url }}'
           ROUTE53_RECORD_NAMES='${{ steps.dns_snapshot.outputs.route53_record_names }}'
@@ -285,6 +324,7 @@ jobs:
             echo "| Region | ${{ env.AWS_REGION }} |"
             echo "| Instance Access State Key | ${{ env.INSTANCE_ACCESS_STATE_KEY }} |"
             echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
+            echo "| ACM State Key | ${{ env.ACM_STATE_KEY }} |"
             echo "| Load Balancer State Key | ${{ env.LB_STATE_KEY }} |"
             echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
             echo "| Previous IAM Role Name | ${IAM_ROLE_NAME:-N/A} |"
@@ -292,6 +332,8 @@ jobs:
             echo "| Previous Route53 Zone ID | ${ROUTE53_ZONE_ID:-N/A} |"
             echo "| Previous Route53 Zone Name | ${ROUTE53_ZONE_NAME:-N/A} |"
             echo "| Previous Route53 Name Servers | ${ROUTE53_NAME_SERVERS:-N/A} |"
+            echo "| Previous ACM Certificate Domain | ${ACM_CERTIFICATE_DOMAIN_NAME:-N/A} |"
+            echo "| Previous ACM Certificate ARN | ${ACM_CERTIFICATE_ARN:-N/A} |"
             echo "| Previous Route53 Record Names | ${ROUTE53_RECORD_NAMES:-N/A} |"
             echo "| Previous Application URLs | ${APPLICATION_URLS:-N/A} |"
             echo "| Previous Load Balancer DNS Name | ${LOAD_BALANCER_DNS_NAME:-N/A} |"
