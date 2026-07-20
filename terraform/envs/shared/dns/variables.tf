@@ -36,13 +36,36 @@ variable "record_names" {
   }
 }
 
-variable "domain_verification_record" {
-  description = "Domain verification record (CNAME)"
-  type        = map(string)
-  default = {
-    name  = "_d98172c7089c8756135db1835ab212d0.exp.absencesbo.tamayo.dev"
-    value = "_30d9dddeb5fc02660b4454fec3bad374.jkddzztszm.acm-validations.aws"
-  }
+variable "route53_state_bucket" {
+  description = "S3 bucket containing the Route53 Terraform remote state"
+  type        = string
+}
+
+variable "route53_state_key" {
+  description = "S3 key containing the Route53 Terraform remote state"
+  type        = string
+}
+
+variable "route53_state_region" {
+  description = "AWS region containing the Route53 Terraform remote state bucket"
+  type        = string
+  default     = "us-east-2"
+}
+
+variable "lb_state_bucket" {
+  description = "S3 bucket containing the Load Balancer Terraform remote state"
+  type        = string
+}
+
+variable "lb_state_key" {
+  description = "S3 key containing the Load Balancer Terraform remote state"
+  type        = string
+}
+
+variable "lb_state_region" {
+  description = "AWS region containing the Load Balancer Terraform remote state bucket"
+  type        = string
+  default     = "us-east-2"
 }
 
 variable "tags" {

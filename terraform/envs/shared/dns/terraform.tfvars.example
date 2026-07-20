@@ -5,6 +5,14 @@ record_names = [
   "exp.absencesbo.tamayo.dev"
 ]
 
+route53_state_bucket = "absencesbo-terraform-state"
+route53_state_key    = "shared/route53/terraform.tfstate"
+route53_state_region = "us-east-2"
+
+lb_state_bucket = "absencesbo-terraform-state"
+lb_state_key    = "shared/load_balancer/terraform.tfstate"
+lb_state_region = "us-east-2"
+
 tags = {
   Owner = "platform"
 }
