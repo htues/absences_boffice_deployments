@@ -34,43 +34,18 @@ output "instance_public_dns" {
 }
 
 output "iam_role_name" {
-  description = "IAM role name attached to the EC2 instance"
-  value       = aws_iam_role.ec2.name
+  description = "IAM role name sourced from the shared instance access state"
+  value       = data.terraform_remote_state.shared_instance_access.outputs.iam_role_name
 }
 
 output "iam_instance_profile_name" {
-  description = "IAM instance profile name attached to the EC2 instance"
-  value       = aws_iam_instance_profile.ec2.name
+  description = "IAM instance profile name sourced from the shared instance access state"
+  value       = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
 }
 
 output "ebs_volume_id" {
   description = "ID of the additional EBS data volume"
   value       = aws_ebs_volume.dev_data.id
-}
-
-output "route53_zone_id" {
-  description = "Route53 hosted zone ID sourced from shared state"
-  value       = data.terraform_remote_state.shared.outputs.route53_zone_id
-}
-
-output "route53_record_names" {
-  description = "Route53 DNS record names created for the dev environment"
-  value       = [for record in aws_route53_record.environment : record.fqdn]
-}
-
-output "application_urls" {
-  description = "HTTPS URLs for the dev application DNS records"
-  value       = [for record in aws_route53_record.environment : "https://${record.fqdn}"]
-}
-
-output "load_balancer_dns_name" {
-  description = "Public DNS name of the dev application Network Load Balancer"
-  value       = aws_lb.dev_app.dns_name
-}
-
-output "load_balancer_url" {
-  description = "Public HTTP URL of the raw dev Network Load Balancer, mainly for debugging"
-  value       = "http://${aws_lb.dev_app.dns_name}"
 }
 
 output "app_nodeport" {

@@ -134,44 +134,13 @@ resource "aws_security_group" "dev" {
   })
 }
 
-resource "aws_iam_role" "ec2" {
-  name = "${local.name_prefix}-ec2-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_ssm" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "ec2" {
-  name = "${local.name_prefix}-ec2-profile"
-  role = aws_iam_role.ec2.name
-
-  tags = local.common_tags
-}
-
 resource "aws_instance" "dev" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.dev.id]
   associate_public_ip_address = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  iam_instance_profile        = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
 
   depends_on = [aws_route_table_association.public]
 
@@ -204,70 +173,6 @@ resource "aws_eip" "dev" {
 resource "aws_eip_association" "dev" {
   instance_id   = aws_instance.dev.id
   allocation_id = aws_eip.dev.id
-}
-
-resource "aws_lb" "dev_app" {
-  name               = "${local.name_prefix}-nlb"
-  load_balancer_type = "network"
-  internal           = false
-  subnets            = [aws_subnet.public.id]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-nlb"
-  })
-}
-
-resource "aws_lb_target_group" "dev_app" {
-  name        = "${local.name_prefix}-tg"
-  port        = var.app_nodeport
-  protocol    = "TCP"
-  target_type = "instance"
-  vpc_id      = aws_vpc.dev.id
-
-  health_check {
-    enabled             = true
-    protocol            = "HTTP"
-    path                = var.app_health_check_path
-    port                = tostring(var.app_nodeport)
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    interval            = 30
-    timeout             = 10
-    matcher             = "200-399"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-tg"
-  })
-}
-
-resource "aws_lb_target_group_attachment" "dev_app" {
-  target_group_arn = aws_lb_target_group.dev_app.arn
-  target_id        = aws_instance.dev.id
-  port             = var.app_nodeport
-}
-
-resource "aws_lb_listener" "dev_app_http" {
-  load_balancer_arn = aws_lb.dev_app.arn
-  port              = 80
-  protocol          = "TCP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.dev_app.arn
-  }
-}
-
-resource "aws_lb_listener" "dev_app_https" {
-  load_balancer_arn = aws_lb.dev_app.arn
-  port              = 443
-  protocol          = "TLS"
-  certificate_arn   = var.acm_certificate_dev_app_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.dev_app.arn
-  }
 }
 
 resource "aws_ebs_volume" "dev_data" {

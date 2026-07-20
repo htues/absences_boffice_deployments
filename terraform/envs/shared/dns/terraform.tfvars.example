@@ -1,0 +1,10 @@
+aws_region   = "us-east-2"
+project_name = "absencesbo"
+
+record_names = [
+  "exp.absencesbo.tamayo.dev"
+]
+
+tags = {
+  Owner = "platform"
+}

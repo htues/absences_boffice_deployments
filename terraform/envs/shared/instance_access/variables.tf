@@ -20,23 +20,6 @@ variable "aws_region" {
   }
 }
 
-variable "route53_zone_id" {
-  description = "Optional Route53 hosted zone ID for the shared DNS zone"
-  type        = string
-  default     = ""
-}
-
-variable "root_domain_name" {
-  description = "Root DNS domain managed in Route53"
-  type        = string
-  default     = "tamayo.dev"
-
-  validation {
-    condition     = can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", var.root_domain_name))
-    error_message = "root_domain_name must be a valid domain name."
-  }
-}
-
 variable "tags" {
   description = "Additional tags to apply to all resources"
   type        = map(string)

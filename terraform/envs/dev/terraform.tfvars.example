@@ -2,14 +2,7 @@ aws_region   = "us-east-2"
 project_name = "absencesbo"
 environment  = "experimental"
 
-# Prefer SSM Session Manager for dev access.
-# Enable SSH only if you really need it.
-require_ssh_key_pair = false
-create_ssh_key_pair  = false
-key_pair_name        = ""
-
 # Keep administrative access closed by default.
-allowed_ssh_cidrs = []
 allowed_k3s_cidrs = []
 
 # Public web access for the dev application.
@@ -30,15 +23,6 @@ root_volume_size  = 30
 data_volume_type  = "gp3"
 data_volume_size  = 20
 data_device_name  = "/dev/sdf"
-
-# DNS.
-environment_dns_records = [
-  "exp.absencesbo.tamayo.dev"
-]
-
-# TLS certificate for the NLB HTTPS listener.
-# Required while aws_lb_listener.dev_app_https is mandatory.
-acm_certificate_dev_app_arn = "arn:aws:acm:us-east-2:123456789012:certificate/00000000-0000-0000-0000-000000000000"
 
 # k3s service NodePort targeted by the NLB.
 app_nodeport = 32322
