@@ -19,6 +19,16 @@ data "aws_subnet" "target" {
   id = data.aws_instance.target.subnet_id
 }
 
+data "terraform_remote_state" "acm" {
+  backend = "s3"
+
+  config = {
+    bucket = var.acm_state_bucket
+    key    = var.acm_state_key
+    region = var.acm_state_region
+  }
+}
+
 resource "aws_lb" "application" {
   name               = "${local.name_prefix}-nlb"
   load_balancer_type = "network"
@@ -75,7 +85,7 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.application.arn
   port              = 443
   protocol          = "TLS"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = data.terraform_remote_state.acm.outputs.acm_certificate_arn
 
   default_action {
     type             = "forward"
