@@ -4,7 +4,10 @@ environment = "shared"
 target_environment = "experimental"
 target_component = "dev"
 app_nodeport = 32322
-acm_certificate_arn = "arn:aws:acm:us-east-2:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+
+acm_state_bucket = "absencesbo-terraform-state"
+acm_state_key    = "shared/acm/terraform.tfstate"
+acm_state_region = "us-east-2"
 
 tags = {
   Owner = "platform"

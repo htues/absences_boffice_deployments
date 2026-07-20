@@ -54,14 +54,20 @@ variable "app_nodeport" {
   }
 }
 
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN used by the TLS listener"
+variable "acm_state_bucket" {
+  description = "S3 bucket containing the ACM Terraform remote state"
   type        = string
+}
 
-  validation {
-    condition     = can(regex("^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-f0-9-]+$", var.acm_certificate_arn))
-    error_message = "acm_certificate_arn must be a valid ACM certificate ARN."
-  }
+variable "acm_state_key" {
+  description = "S3 key containing the ACM Terraform remote state"
+  type        = string
+}
+
+variable "acm_state_region" {
+  description = "AWS region containing the ACM Terraform remote state bucket"
+  type        = string
+  default     = "us-east-2"
 }
 
 variable "tags" {
