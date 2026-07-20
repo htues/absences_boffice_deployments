@@ -33,3 +33,11 @@ resource "aws_route53_record" "application" {
     evaluate_target_health = true
   }
 }
+
+resource "aws_route53_record" "verification" {
+  zone_id = data.terraform_remote_state.route53.outputs.route53_zone_id
+  name    = var.domain_verification_record["name"]
+  type    = "CNAME"
+  ttl     = 300
+  records = [var.domain_verification_record["value"]]
+}
