@@ -112,6 +112,20 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
 
+          terraform -chdir=terraform/envs/shared/iam import \
+          aws_iam_openid_connect_provider.github \
+          arn:aws:iam::482619384845:oidc-provider/token.actions.githubusercontent.com
+          
+          terraform -chdir=terraform/envs/shared/iam import \
+          'aws_iam_role.managed["websystem-deployer"]' \
+          websystem-deployer
+
+          terraform -chdir=terraform/envs/shared/iam plan \
+          -var="project_name=absencesbo" \
+          -var="environment=shared" \
+          -var="managed_by=terraform" \
+          -var="layer=iam"
+
       - name: Terraform validate - IAM
         shell: bash
         run: |

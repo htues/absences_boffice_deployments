@@ -25,6 +25,14 @@ locals {
     })
   }
 
+  trust_policy_documents = {
+    for trust_policy_file in fileset("${path.module}/json/roles", "*.json") :
+    trimsuffix(trust_policy_file, "_trusted_policy.json") => templatefile("${path.module}/json/roles/${trust_policy_file}", {
+      oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
+      account_id        = data.aws_caller_identity.current.account_id
+    })
+  }
+
   policy_role_attachments = {
     for attachment in flatten([
       for role_name, policy_names in merge(local.default_policy_role_attachments, var.policy_role_attachments) : [
@@ -55,34 +63,20 @@ resource "aws_iam_openid_connect_provider" "github" {
   })
 }
 
-resource "aws_iam_role" "github_actions_deployer" {
-  name = var.deployment_role_name
+resource "aws_iam_role" "managed" {
+  for_each = local.trust_policy_documents
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "GitHubActionsAssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
-        }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = var.github_oidc_subjects
-          }
-        }
-      }
-    ]
-  })
+  name               = each.key
+  assume_role_policy = each.value
 
   tags = merge(local.common_tags, {
-    Name = var.deployment_role_name
+    Name = each.key
   })
+}
+
+moved {
+  from = aws_iam_role.github_actions_deployer
+  to   = aws_iam_role.managed["websystem-deployer"]
 }
 
 resource "aws_iam_policy" "custom" {
@@ -101,6 +95,8 @@ resource "aws_iam_policy" "custom" {
 resource "aws_iam_role_policy_attachment" "custom" {
   for_each = local.policy_role_attachments
 
-  role       = aws_iam_role.github_actions_deployer.name
+  role       = each.value.role_name
   policy_arn = aws_iam_policy.custom[each.value.policy_name].arn
+
+  depends_on = [aws_iam_role.managed]
 }
