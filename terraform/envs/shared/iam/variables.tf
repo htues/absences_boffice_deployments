@@ -37,7 +37,7 @@ variable "policy_path" {
 variable "deployment_role_name" {
   description = "Default IAM role name that should receive the shared infrastructure policies"
   type        = string
-  default     = "staging-absencesbo-deployer"
+  default     = "websystem-deployer"
 }
 
 variable "policy_role_attachments" {

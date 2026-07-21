@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 locals {
   common_tags = {
     Project     = var.project_name
@@ -18,7 +20,9 @@ locals {
 
   policy_documents = {
     for policy_file in local.policy_files :
-    trimsuffix(policy_file, ".json") => jsondecode(file("${path.module}/json/${policy_file}"))
+    trimsuffix(policy_file, ".json") => templatefile("${path.module}/json/${policy_file}", {
+      account_id = data.aws_caller_identity.current.account_id
+    })
   }
 
   policy_role_attachments = {
@@ -40,7 +44,7 @@ resource "aws_iam_policy" "custom" {
   name        = var.policy_name_prefix == "" ? each.key : "${var.policy_name_prefix}-${each.key}"
   path        = var.policy_path
   description = "Terraform-managed policy loaded from ${each.key}.json"
-  policy      = jsonencode(each.value)
+  policy      = each.value
 
   tags = merge(local.common_tags, {
     Name = each.key

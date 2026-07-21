@@ -17,7 +17,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 # IAM Role for GitHub Actions deployment
 resource "aws_iam_role" "github_actions_deployer" {
-  name = "${var.environment}-${var.project_name}-deployer"
+  name = var.deployment_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -33,7 +33,7 @@ resource "aws_iam_role" "github_actions_deployer" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:htues/absencesbo-devops:*"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_repo}:*"
           }
         }
       }

@@ -40,5 +40,11 @@ variable "github_owner" {
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
-  default     = "absencesbo"
+  default     = "absences_boffice_deployments"
+}
+
+variable "deployment_role_name" {
+  description = "The name of the IAM role to create for GitHub Actions"
+  type        = string
+  default     = "websystem-deployer"
 }

@@ -122,8 +122,8 @@
         "iam:UpdateRoleDescription"
       ],
       "Resource": [
-        "arn:aws:iam::482619384845:role/staging-absencesbo-*",
-        "arn:aws:iam::482619384845:role/eks-*"
+        "arn:aws:iam::${account_id}:role/staging-absencesbo-*",
+        "arn:aws:iam::${account_id}:role/eks-*"
       ]
     },
     {
@@ -143,8 +143,8 @@
         "cloudwatch:GetMetricStatistics"
       ],
       "Resource": [
-        "arn:aws:cloudwatch:us-east-2:482619384845:dashboard/*",
-        "arn:aws:cloudwatch:us-east-2:482619384845:alarm:*"
+        "arn:aws:cloudwatch:us-east-2:${account_id}:dashboard/*",
+        "arn:aws:cloudwatch:us-east-2:${account_id}:alarm:*"
       ],
       "Condition": {
         "StringEquals": {
@@ -167,8 +167,8 @@
         "logs:FilterLogEvents"
       ],
       "Resource": [
-        "arn:aws:logs:us-east-2:482619384845:log-group:*",
-        "arn:aws:logs:us-east-2:482619384845:log-group:/aws/eks/*:*"
+        "arn:aws:logs:us-east-2:${account_id}:log-group:*",
+        "arn:aws:logs:us-east-2:${account_id}:log-group:/aws/eks/*:*"
       ],
       "Condition": {
         "StringEquals": {

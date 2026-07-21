@@ -42,7 +42,7 @@
       "Sid": "AllowGetEKSNodegroupServiceLinkedRole",
       "Effect": "Allow",
       "Action": "iam:GetRole",
-      "Resource": "arn:aws:iam::482619384845:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
+      "Resource": "arn:aws:iam::${account_id}:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup"
     },
     {
       "Sid": "AllowCreateEKSNodegroupServiceLinkedRole",
@@ -69,10 +69,10 @@
         "iam:AttachRolePolicy",
         "iam:DetachRolePolicy"
       ],
-      "Resource": "arn:aws:iam::482619384845:role/*-absencesbo-cluster-*",
+      "Resource": "arn:aws:iam::${account_id}:role/*-absencesbo-cluster-*",
       "Condition": {
         "StringEquals": {
-          "iam:PermissionsBoundary": "arn:aws:iam::482619384845:policy/EKSClusterBoundary"
+          "iam:PermissionsBoundary": "arn:aws:iam::${account_id}:policy/EKSClusterBoundary"
         }
       }
     },
@@ -123,7 +123,7 @@
       "Sid": "IAMPassRoleForIRSA",
       "Effect": "Allow",
       "Action": "iam:PassRole",
-      "Resource": "arn:aws:iam::482619384845:role/*-absencesbo-ebs-csi-role",
+      "Resource": "arn:aws:iam::${account_id}:role/*-absencesbo-ebs-csi-role",
       "Condition": {
         "StringEquals": {
           "iam:PassedToService": "eks.amazonaws.com"

@@ -195,9 +195,9 @@
         "logs:GetLogEvents"
       ],
       "Resource": [
-        "arn:aws:logs:us-east-2:482619384845:log-group:/aws/vpc/*",
-        "arn:aws:logs:us-east-2:482619384845:log-group:/aws/vpc/*:*",
-        "arn:aws:logs:us-east-2:482619384845:log-group:/aws/vpc/*-flow-logs:*",
+        "arn:aws:logs:us-east-2:${account_id}:log-group:/aws/vpc/*",
+        "arn:aws:logs:us-east-2:${account_id}:log-group:/aws/vpc/*:*",
+        "arn:aws:logs:us-east-2:${account_id}:log-group:/aws/vpc/*-flow-logs:*",
         "*"
       ]
     },
@@ -210,8 +210,8 @@
         "cloudwatch:UntagResource"
       ],
       "Resource": [
-        "arn:aws:cloudwatch:us-east-2:482619384845:alarm:*",
-        "arn:aws:cloudwatch:us-east-2:482619384845:dashboard/*"
+        "arn:aws:cloudwatch:us-east-2:${account_id}:alarm:*",
+        "arn:aws:cloudwatch:us-east-2:${account_id}:dashboard/*"
       ]
     },
     {
@@ -234,8 +234,25 @@
         "secretsmanager:GetSecretValue"
       ],
       "Resource": [
-        "arn:aws:secretsmanager:us-east-2:482619384845:secret:absencesbocred*"
+        "arn:aws:secretsmanager:us-east-2:${account_id}:secret:absencesbocred*"
       ]
+    },
+    {
+      "Sid": "ACMManagement",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:GetCertificate",
+        "acm:DeleteCertificate",
+        "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
+        "acm:AddTagsToCertificate",
+        "acm:RemoveTagsFromCertificate",
+        "acm:ResendValidationEmail",
+        "acm:UpdateCertificateOptions"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "LogsManagement",
