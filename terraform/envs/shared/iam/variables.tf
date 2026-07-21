@@ -44,6 +44,7 @@ variable "github_oidc_subjects" {
   description = "GitHub OIDC subject patterns allowed to assume the deployer role"
   type        = list(string)
   default = [
+    "repo:htues/absencesbo-devops:*",
     "repo:htues@81975375/absences_boffice_deployments@1301927577:*"
   ]
 }

@@ -30,6 +30,7 @@ locals {
     trimsuffix(trust_policy_file, "_trusted_policy.json") => templatefile("${path.module}/json/roles/${trust_policy_file}", {
       oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
       account_id        = data.aws_caller_identity.current.account_id
+      oidc_subjects     = jsonencode(var.github_oidc_subjects)
     })
   }
 
@@ -77,6 +78,16 @@ resource "aws_iam_role" "managed" {
 moved {
   from = aws_iam_role.github_actions_deployer
   to   = aws_iam_role.managed["websystem-deployer"]
+}
+
+import {
+  to = aws_iam_openid_connect_provider.github
+  id = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+}
+
+import {
+  to = aws_iam_role.managed["websystem-deployer"]
+  id = "websystem-deployer"
 }
 
 resource "aws_iam_policy" "custom" {

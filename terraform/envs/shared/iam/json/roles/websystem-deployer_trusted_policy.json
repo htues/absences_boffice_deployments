@@ -5,7 +5,7 @@
       "Sid": "GitHubActionsAssumeRole",
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::${account_id}:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "${oidc_provider_arn}"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
@@ -13,10 +13,7 @@
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": [
-            "repo:htues/absencesbo-devops:*",
-            "repo:htues@81975375/absences_boffice_deployments@1301927577:*"
-          ]
+          "token.actions.githubusercontent.com:sub": ${oidc_subjects}
         }
       }
     }
