@@ -1,3 +1,10 @@
+
+## PART 1: IAM DUTIES
+- Github OIDC provider
+- setting trusted policies
+- role and policies creation
+
+
 ## DNS, HOSTED ZONE AND SSL
 
 - name.com = registrar only
