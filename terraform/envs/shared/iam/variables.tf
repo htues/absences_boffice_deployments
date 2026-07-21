@@ -40,6 +40,14 @@ variable "deployment_role_name" {
   default     = "websystem-deployer"
 }
 
+variable "github_oidc_subjects" {
+  description = "GitHub OIDC subject patterns allowed to assume the deployer role"
+  type        = list(string)
+  default = [
+    "repo:htues@81975375/absences_boffice_deployments@1301927577:*"
+  ]
+}
+
 variable "policy_role_attachments" {
   description = "Map of IAM role names to policy keys that should be attached to them"
   type        = map(list(string))
