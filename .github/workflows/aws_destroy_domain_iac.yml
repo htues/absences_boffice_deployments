@@ -73,12 +73,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # deployer IAM role
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: (Optional) Debug OIDC token claims
         if: ${{ inputs.debug_oidc }}
         uses: actions/github-script@v7
@@ -89,6 +83,15 @@ jobs:
             core.info(`aud=${payload.aud}`);
             core.info(`sub=${payload.sub}`);
             core.info(`iss=${payload.iss}`);
+            core.info(`repository=${payload.repository}`);
+            core.info(`workflow_ref=${payload.workflow_ref}`);
+            core.info(`job_workflow_ref=${payload.job_workflow_ref}`);            
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # deployer IAM role
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Validate AWS identity + region
         shell: bash
