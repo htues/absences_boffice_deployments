@@ -1,0 +1,138 @@
+name: AWS DEPLOY EDGE IAC
+on:
+
+jobs:
+  - name: Terraform init - Load Balancer
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/load_balancer init -reconfigure \
+        -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+        -backend-config="key=${{ env.LB_STATE_KEY }}" \
+        -backend-config="region=${{ env.AWS_REGION }}" \
+        -backend-config="encrypt=true" \
+        -backend-config="use_lockfile=true"
+
+  - name: Terraform validate - Load Balancer
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/load_balancer validate
+
+  - name: Terraform apply - Load Balancer
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/load_balancer apply -auto-approve \
+        -var="project_name=${{ env.PROJECT_NAME }}" \
+        -var="aws_region=${{ env.AWS_REGION }}" \
+        -var="acm_state_bucket=${{ env.BUCKET_NAME }}" \
+        -var="acm_state_key=${{ env.ACM_STATE_KEY }}" \
+        -var="acm_state_region=${{ env.AWS_REGION }}"
+
+  - name: Export Load Balancer outputs
+    id: lb_outputs
+    shell: bash
+    run: |
+      set -euo pipefail
+      cd terraform/envs/shared/load_balancer
+      
+      LOAD_BALANCER_DNS_NAME="$(terraform output -raw load_balancer_dns_name)"
+      LOAD_BALANCER_URL="$(terraform output -raw load_balancer_url)"
+      
+      if [[ -z "${LOAD_BALANCER_DNS_NAME}" || -z "${LOAD_BALANCER_URL}" ]]; then
+        echo "Load balancer outputs are empty."
+        exit 1
+      fi
+      
+      echo "load_balancer_dns_name=${LOAD_BALANCER_DNS_NAME}" >> "$GITHUB_OUTPUT"
+      echo "load_balancer_url=${LOAD_BALANCER_URL}" >> "$GITHUB_OUTPUT"
+
+  - name: Terraform init - DNS
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/dns init -reconfigure \
+        -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+        -backend-config="key=${{ env.DNS_STATE_KEY }}" \
+        -backend-config="region=${{ env.AWS_REGION }}" \
+        -backend-config="encrypt=true" \
+        -backend-config="use_lockfile=true"
+
+  - name: Terraform validate - DNS
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/dns validate
+
+  - name: Terraform apply - DNS
+    shell: bash
+    run: |
+      set -euo pipefail
+      terraform -chdir=terraform/envs/shared/dns apply -auto-approve \
+        -var="project_name=${{ env.PROJECT_NAME }}" \
+        -var="aws_region=${{ env.AWS_REGION }}" \
+        -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
+        -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
+        -var="route53_state_region=${{ env.AWS_REGION }}" \
+        -var="lb_state_bucket=${{ env.BUCKET_NAME }}" \
+        -var="lb_state_key=${{ env.LB_STATE_KEY }}" \
+        -var="lb_state_region=${{ env.AWS_REGION }}"
+
+  - name: Export DNS outputs
+    id: dns_outputs
+    shell: bash
+    run: |
+      set -euo pipefail
+      cd terraform/envs/shared/dns
+      
+      ROUTE53_ZONE_ID="$(terraform output -raw route53_zone_id)"
+      ROUTE53_ZONE_NAME="$(terraform output -raw route53_zone_name)"
+      ROUTE53_NAME_SERVERS="$(terraform output -json route53_name_servers | jq -r 'join(", ")')"
+      ROUTE53_RECORD_NAMES="$(terraform output -json route53_record_names | jq -r 'join(", ")')"
+      APPLICATION_URLS="$(terraform output -json application_urls | jq -r 'join(", ")')"
+      LOAD_BALANCER_DNS_NAME="$(terraform output -raw load_balancer_dns_name)"
+      LOAD_BALANCER_URL="$(terraform output -raw load_balancer_url)"
+      
+      if [[ -z "${ROUTE53_ZONE_ID}" ]]; then
+        echo "Route53 zone ID is empty."
+        exit 1
+      fi
+      
+      if [[ -z "${ROUTE53_ZONE_NAME}" ]]; then
+        echo "Route53 zone name is empty."
+        exit 1
+      fi
+      
+      echo "route53_zone_id=${ROUTE53_ZONE_ID}" >> "$GITHUB_OUTPUT"
+      echo "route53_zone_name=${ROUTE53_ZONE_NAME}" >> "$GITHUB_OUTPUT"
+      echo "route53_name_servers=${ROUTE53_NAME_SERVERS}" >> "$GITHUB_OUTPUT"
+      echo "route53_record_names=${ROUTE53_RECORD_NAMES}" >> "$GITHUB_OUTPUT"
+      echo "application_urls=${APPLICATION_URLS}" >> "$GITHUB_OUTPUT"
+      echo "load_balancer_dns_name=${LOAD_BALANCER_DNS_NAME}" >> "$GITHUB_OUTPUT"
+      echo "load_balancer_url=${LOAD_BALANCER_URL}" >> "$GITHUB_OUTPUT"
+      
+      - name: Shared deployment summary
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LOAD_BALANCER_DNS_NAME='${{ steps.lb_outputs.outputs.load_balancer_dns_name }}'
+          LOAD_BALANCER_URL='${{ steps.lb_outputs.outputs.load_balancer_url }}'
+          APPLICATION_URLS='${{ steps.dns_outputs.outputs.application_urls }}'
+
+          {
+            echo "### Shared Domain Deployment Summary"
+            echo ""
+            echo "| Item | Value |"
+            echo "| ---- | ----- |"
+            echo "| Job Status | ${{ job.status }} |"
+            echo "| Project | ${{ env.PROJECT_NAME }} |"
+            echo "| Region | ${{ env.AWS_REGION }} |"
+            echo "| Load Balancer State Key | ${{ env.LB_STATE_KEY }} |"
+            echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
+            echo "| Application URLs | ${APPLICATION_URLS} |"
+            echo "| Load Balancer DNS Name | ${LOAD_BALANCER_DNS_NAME} |"
+            echo "| Load Balancer URL | ${LOAD_BALANCER_URL} |"
+          } >> "$GITHUB_STEP_SUMMARY"
