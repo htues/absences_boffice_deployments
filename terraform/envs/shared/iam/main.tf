@@ -21,7 +21,8 @@ locals {
   policy_documents = {
     for policy_file in local.policy_files :
     trimsuffix(policy_file, ".json") => templatefile("${path.module}/json/${policy_file}", {
-      account_id = data.aws_caller_identity.current.account_id
+      account_id      = data.aws_caller_identity.current.account_id
+      route53_zone_id = var.route53_zone_id
     })
   }
 

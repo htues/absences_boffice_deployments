@@ -34,7 +34,7 @@ variable "root_domain_name" {
 variable "certificate_domain_name" {
   description = "Primary domain name for the ACM certificate"
   type        = string
-  default     = "exp.absencesbo.tamayo.dev"
+  default     = "tamayo.dev"
 
   validation {
     condition     = can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", var.certificate_domain_name))
@@ -45,7 +45,7 @@ variable "certificate_domain_name" {
 variable "subject_alternative_names" {
   description = "Additional domain names for the ACM certificate"
   type        = list(string)
-  default     = []
+  default     = ["*.tamayo.dev"]
 
   validation {
     condition = alltrue([

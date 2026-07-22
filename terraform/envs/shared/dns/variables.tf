@@ -24,7 +24,9 @@ variable "record_names" {
   description = "DNS names that should alias the shared application target"
   type        = list(string)
   default = [
-    "exp.absencesbo.tamayo.dev"
+    "dev.tamayo.dev",
+    "stg.tamayo.dev",
+    "apps.tamayo.dev"
   ]
 
   validation {
