@@ -1,0 +1,10 @@
+aws_region       = "us-east-2"
+project_name     = "absencesbo"
+root_domain_name = "tamayo.dev"
+
+# Optional: if using an existing hosted zone, provide its ID
+# route53_zone_id = "Z1234567890"
+
+tags = {
+  Owner = "platform"
+}

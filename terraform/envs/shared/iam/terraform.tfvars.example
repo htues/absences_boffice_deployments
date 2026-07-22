@@ -1,0 +1,2 @@
+project_name    = "absencesbo"
+route53_zone_id = "*" # Replace with actual zone ID for better security scoping
