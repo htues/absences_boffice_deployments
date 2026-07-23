@@ -50,15 +50,13 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      iam_role_name: ${{ steps.instance_access_snapshot.outputs.iam_role_name }}
-      iam_instance_profile_name: ${{ steps.instance_access_snapshot.outputs.iam_instance_profile_name }}
-      route53_zone_id: ${{ steps.route53_snapshot.outputs.route53_zone_id }}
-      route53_zone_name: ${{ steps.route53_snapshot.outputs.route53_zone_name }}
-      route53_name_servers: ${{ steps.route53_snapshot.outputs.route53_name_servers }}
-      load_balancer_dns_name: ${{ steps.lb_snapshot.outputs.load_balancer_dns_name }}
-      load_balancer_url: ${{ steps.lb_snapshot.outputs.load_balancer_url }}
-      route53_record_names: ${{ steps.dns_snapshot.outputs.route53_record_names }}
-      application_urls: ${{ steps.dns_snapshot.outputs.application_urls }}
+      iam_role_name: ${{ steps.instance_access_outputs.outputs.iam_role_name }}
+      iam_instance_profile_name: ${{ steps.instance_access_outputs.outputs.iam_instance_profile_name }}
+      route53_zone_id: ${{ steps.route53_outputs.outputs.route53_zone_id }}
+      route53_zone_name: ${{ steps.route53_outputs.outputs.route53_zone_name }}
+      route53_name_servers: ${{ steps.route53_outputs.outputs.route53_name_servers }}
+      acm_certificate_arn: ${{ steps.acm_outputs.outputs.acm_certificate_arn }}
+      acm_certificate_domain_name: ${{ steps.acm_outputs.outputs.acm_certificate_domain_name }}
 
     steps:
       - name: Guardrail - confirmation
@@ -115,16 +113,46 @@ jobs:
           set -euo pipefail
           terraform fmt -check -recursive terraform/envs/shared/instance_access terraform/envs/shared/route53 terraform/envs/shared/acm terraform/envs/shared/load_balancer terraform/envs/shared/dns
 
-      - name: Terraform init - Instance Access
+      - name: Terraform init - ACM
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/instance_access init -reconfigure \
+          terraform -chdir=terraform/envs/shared/acm init -reconfigure \
             -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.INSTANCE_ACCESS_STATE_KEY }}" \
+            -backend-config="key=${{ env.ACM_STATE_KEY }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - ACM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/acm validate
+
+      - name: Export ACM outputs
+        id: acm_outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/acm
+
+          ACM_CERTIFICATE_ARN="$(terraform output -raw acm_certificate_arn 2>/dev/null || true)"
+          ACM_CERTIFICATE_DOMAIN_NAME="$(terraform output -raw acm_certificate_domain_name 2>/dev/null || true)"
+
+          echo "acm_certificate_arn=${ACM_CERTIFICATE_ARN}" >> "$GITHUB_OUTPUT"
+          echo "acm_certificate_domain_name=${ACM_CERTIFICATE_DOMAIN_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform destroy - ACM
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/acm destroy -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
+            -var="route53_state_region=${{ env.AWS_REGION }}"
 
       - name: Terraform init - Route53
         shell: bash
@@ -137,54 +165,14 @@ jobs:
             -backend-config="encrypt=true" \
             -backend-config="use_lockfile=true"
 
-      - name: Terraform init - ACM
+      - name: Terraform validate - Route53
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/shared/acm init -reconfigure \
-            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.ACM_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
+          terraform -chdir=terraform/envs/shared/route53 validate
 
-      - name: Terraform init - Load Balancer
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform -chdir=terraform/envs/shared/load_balancer init -reconfigure \
-            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.LB_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
-
-      - name: Terraform init - DNS
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform -chdir=terraform/envs/shared/dns init -reconfigure \
-            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
-            -backend-config="key=${{ env.DNS_STATE_KEY }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="encrypt=true" \
-            -backend-config="use_lockfile=true"
-
-      - name: Snapshot Instance Access outputs
-        id: instance_access_snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd terraform/envs/shared/instance_access
-
-          IAM_ROLE_NAME="$(terraform output -raw iam_role_name 2>/dev/null || true)"
-          IAM_INSTANCE_PROFILE_NAME="$(terraform output -raw iam_instance_profile_name 2>/dev/null || true)"
-
-          echo "iam_role_name=${IAM_ROLE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "iam_instance_profile_name=${IAM_INSTANCE_PROFILE_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Snapshot Route53 outputs
-        id: route53_snapshot
+      - name: Export Route53 outputs
+        id: route53_outputs
         shell: bash
         run: |
           set -euo pipefail
@@ -198,87 +186,6 @@ jobs:
           echo "route53_zone_name=${ROUTE53_ZONE_NAME}" >> "$GITHUB_OUTPUT"
           echo "route53_name_servers=${ROUTE53_NAME_SERVERS}" >> "$GITHUB_OUTPUT"
 
-      - name: Snapshot Load Balancer outputs
-        id: lb_snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd terraform/envs/shared/load_balancer
-
-          LOAD_BALANCER_DNS_NAME="$(terraform output -raw load_balancer_dns_name 2>/dev/null || true)"
-          LOAD_BALANCER_URL="$(terraform output -raw load_balancer_url 2>/dev/null || true)"
-
-          echo "load_balancer_dns_name=${LOAD_BALANCER_DNS_NAME}" >> "$GITHUB_OUTPUT"
-          echo "load_balancer_url=${LOAD_BALANCER_URL}" >> "$GITHUB_OUTPUT"
-
-      - name: Snapshot ACM outputs
-        id: acm_snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd terraform/envs/shared/acm
-
-          ACM_CERTIFICATE_ARN="$(terraform output -raw acm_certificate_arn 2>/dev/null || true)"
-          ACM_CERTIFICATE_DOMAIN_NAME="$(terraform output -raw acm_certificate_domain_name 2>/dev/null || true)"
-
-          echo "acm_certificate_arn=${ACM_CERTIFICATE_ARN}" >> "$GITHUB_OUTPUT"
-          echo "acm_certificate_domain_name=${ACM_CERTIFICATE_DOMAIN_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Snapshot DNS outputs
-        id: dns_snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd terraform/envs/shared/dns
-
-          ROUTE53_ZONE_ID="$(terraform output -raw route53_zone_id 2>/dev/null || true)"
-          ROUTE53_ZONE_NAME="$(terraform output -raw route53_zone_name 2>/dev/null || true)"
-          ROUTE53_NAME_SERVERS="$(terraform output -json route53_name_servers 2>/dev/null | jq -r 'join(", ")' || true)"
-          ROUTE53_RECORD_NAMES="$(terraform output -json route53_record_names 2>/dev/null | jq -r 'join(", ")' || true)"
-          APPLICATION_URLS="$(terraform output -json application_urls 2>/dev/null | jq -r 'join(", ")' || true)"
-
-          echo "route53_zone_id=${ROUTE53_ZONE_ID}" >> "$GITHUB_OUTPUT"
-          echo "route53_zone_name=${ROUTE53_ZONE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "route53_name_servers=${ROUTE53_NAME_SERVERS}" >> "$GITHUB_OUTPUT"
-          echo "route53_record_names=${ROUTE53_RECORD_NAMES}" >> "$GITHUB_OUTPUT"
-          echo "application_urls=${APPLICATION_URLS}" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform destroy - DNS
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform -chdir=terraform/envs/shared/dns destroy -auto-approve \
-            -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
-            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
-            -var="route53_state_region=${{ env.AWS_REGION }}" \
-            -var="lb_state_bucket=${{ env.BUCKET_NAME }}" \
-            -var="lb_state_key=${{ env.LB_STATE_KEY }}" \
-            -var="lb_state_region=${{ env.AWS_REGION }}"
-
-      - name: Terraform destroy - Load Balancer
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform -chdir=terraform/envs/shared/load_balancer destroy -auto-approve \
-            -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="acm_state_bucket=${{ env.BUCKET_NAME }}" \
-            -var="acm_state_key=${{ env.ACM_STATE_KEY }}" \
-            -var="acm_state_region=${{ env.AWS_REGION }}"
-
-      - name: Terraform destroy - ACM
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform -chdir=terraform/envs/shared/acm destroy -auto-approve \
-            -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
-            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
-            -var="route53_state_region=${{ env.AWS_REGION }}"
-
       - name: Terraform destroy - Route53
         shell: bash
         run: |
@@ -287,6 +194,36 @@ jobs:
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="route53_zone_id=${{ env.ROUTE53_ZONE_ID }}"
+
+      - name: Terraform init - Instance Access
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/instance_access init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.INSTANCE_ACCESS_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - Instance Access
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/instance_access validate
+
+      - name: Export Instance Access outputs
+        id: instance_access_outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd terraform/envs/shared/instance_access
+
+          IAM_ROLE_NAME="$(terraform output -raw iam_role_name 2>/dev/null || true)"
+          IAM_INSTANCE_PROFILE_NAME="$(terraform output -raw iam_instance_profile_name 2>/dev/null || true)"
+
+          echo "iam_role_name=${IAM_ROLE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "iam_instance_profile_name=${IAM_INSTANCE_PROFILE_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Terraform destroy - Instance Access
         shell: bash
@@ -302,17 +239,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          IAM_ROLE_NAME='${{ steps.instance_access_snapshot.outputs.iam_role_name }}'
-          IAM_INSTANCE_PROFILE_NAME='${{ steps.instance_access_snapshot.outputs.iam_instance_profile_name }}'
-          ROUTE53_ZONE_ID='${{ steps.route53_snapshot.outputs.route53_zone_id }}'
-          ROUTE53_ZONE_NAME='${{ steps.route53_snapshot.outputs.route53_zone_name }}'
-          ROUTE53_NAME_SERVERS='${{ steps.route53_snapshot.outputs.route53_name_servers }}'
-          ACM_CERTIFICATE_ARN='${{ steps.acm_snapshot.outputs.acm_certificate_arn }}'
-          ACM_CERTIFICATE_DOMAIN_NAME='${{ steps.acm_snapshot.outputs.acm_certificate_domain_name }}'
-          LOAD_BALANCER_DNS_NAME='${{ steps.lb_snapshot.outputs.load_balancer_dns_name }}'
-          LOAD_BALANCER_URL='${{ steps.lb_snapshot.outputs.load_balancer_url }}'
-          ROUTE53_RECORD_NAMES='${{ steps.dns_snapshot.outputs.route53_record_names }}'
-          APPLICATION_URLS='${{ steps.dns_snapshot.outputs.application_urls }}'
+          ROUTE53_ZONE_ID='${{ steps.route53_outputs.outputs.route53_zone_id }}'
+          ROUTE53_ZONE_NAME='${{ steps.route53_outputs.outputs.route53_zone_name }}'
+          ROUTE53_NAME_SERVERS='${{ steps.route53_outputs.outputs.route53_name_servers }}'
+          ACM_CERTIFICATE_ARN='${{ steps.acm_outputs.outputs.acm_certificate_arn }}'
+          ACM_CERTIFICATE_DOMAIN_NAME='${{ steps.acm_outputs.outputs.acm_certificate_domain_name }}'
 
           {
             echo "### Shared Domain Teardown Summary"
@@ -322,21 +253,15 @@ jobs:
             echo "| Job Status | ${{ job.status }} |"
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Region | ${{ env.AWS_REGION }} |"
-            echo "| Instance Access State Key | ${{ env.INSTANCE_ACCESS_STATE_KEY }} |"
             echo "| Route53 State Key | ${{ env.ROUTE53_STATE_KEY }} |"
             echo "| ACM State Key | ${{ env.ACM_STATE_KEY }} |"
-            echo "| Load Balancer State Key | ${{ env.LB_STATE_KEY }} |"
-            echo "| DNS State Key | ${{ env.DNS_STATE_KEY }} |"
-            echo "| Previous IAM Role Name | ${IAM_ROLE_NAME:-N/A} |"
-            echo "| Previous IAM Instance Profile Name | ${IAM_INSTANCE_PROFILE_NAME:-N/A} |"
             echo "| Previous Route53 Zone ID | ${ROUTE53_ZONE_ID:-N/A} |"
             echo "| Previous Route53 Zone Name | ${ROUTE53_ZONE_NAME:-N/A} |"
             echo "| Previous Route53 Name Servers | ${ROUTE53_NAME_SERVERS:-N/A} |"
             echo "| Previous ACM Certificate Domain | ${ACM_CERTIFICATE_DOMAIN_NAME:-N/A} |"
             echo "| Previous ACM Certificate ARN | ${ACM_CERTIFICATE_ARN:-N/A} |"
-            echo "| Previous Route53 Record Names | ${ROUTE53_RECORD_NAMES:-N/A} |"
-            echo "| Previous Application URLs | ${APPLICATION_URLS:-N/A} |"
-            echo "| Previous Load Balancer DNS Name | ${LOAD_BALANCER_DNS_NAME:-N/A} |"
-            echo "| Previous Load Balancer URL | ${LOAD_BALANCER_URL:-N/A} |"
-            echo "| Result | Shared domain artifacts were destroyed |"
+            echo ""
+            echo "### Result"
+            echo ""
+            echo "Shared domain artifacts were successfully destroyed."
           } >> "$GITHUB_STEP_SUMMARY"
