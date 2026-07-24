@@ -1,0 +1,94 @@
+---
+- name: Verify Helm release is present
+  ansible.builtin.command:
+    cmd: "helm status {{ release_name }} -n {{ namespace_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: helm_status_result
+  changed_when: false
+
+- name: Show Helm release status
+  ansible.builtin.debug:
+    msg:
+      - "Release: {{ release_name }}"
+      - "Namespace: {{ namespace_name }}"
+      - "Chart: {{ helm_chart_dir }}"
+      - "Database enabled: {{ deploy_database | bool }}"
+      - "Backend enabled: {{ deploy_backend | bool }}"
+      - "Frontend enabled: {{ deploy_frontend | bool }}"
+      - "Nginx enabled: {{ deploy_nginx | bool }}"
+      - "Database tag: {{ database_tag | default('') }}"
+      - "Backend tag: {{ backend_tag | default('') }}"
+      - "Frontend tag: {{ frontend_tag | default('') }}"
+      - "Nginx tag: {{ nginx_tag | default('') }}"
+      - "Helm status: {{ helm_status_result.stdout | default('') }}"
+
+- name: Check namespace resources
+  ansible.builtin.command:
+    cmd: "kubectl get all -n {{ namespace_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: kubectl_get_all_result
+  changed_when: false
+
+- name: Show namespace resources
+  ansible.builtin.debug:
+    var: kubectl_get_all_result.stdout_lines
+
+- name: Check pods are ready
+  ansible.builtin.command:
+    cmd: "kubectl get pods -n {{ namespace_name }} -o wide"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: kubectl_pods_result
+  changed_when: false
+
+- name: Show pod status
+  ansible.builtin.debug:
+    var: kubectl_pods_result.stdout_lines
+
+- name: Verify all pods are Running and containers are Ready
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    POD_COUNT="$(kubectl get pods -n "{{ namespace_name }}" --no-headers 2>/dev/null | wc -l)"
+
+    if [[ "${POD_COUNT}" -eq 0 ]]; then
+      echo "No pods found in namespace {{ namespace_name }}."
+      exit 1
+    fi
+
+    kubectl get pods -n "{{ namespace_name }}" --no-headers | while read -r name ready status rest; do
+      ready_count="$(echo "${ready}" | cut -d/ -f1)"
+      total_count="$(echo "${ready}" | cut -d/ -f2)"
+
+      if [[ "${status}" != "Running" && "${status}" != "Completed" ]]; then
+        echo "Pod ${name} is not healthy. Status=${status}, Ready=${ready}"
+        exit 1
+      fi
+
+      if [[ "${ready_count}" != "${total_count}" ]]; then
+        echo "Pod ${name} containers are not all ready. Ready=${ready}, Status=${status}"
+        exit 1
+      fi
+    done
+
+    echo "All pods in namespace {{ namespace_name }} are healthy."
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: pod_readiness_check
+  changed_when: false
+
+- name: Get pods as JSON for readiness parsing
+  ansible.builtin.command:
+    cmd: "kubectl get pods -n {{ namespace_name }} -o json"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: kubectl_pods_json_result
+  changed_when: false
+
+- name: Parse pod readiness information
+  ansible.builtin.set_fact:
+    pod_health_report: "{{ kubectl_pods_json_result.stdout | from_json }}"

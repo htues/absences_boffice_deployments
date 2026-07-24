@@ -1,0 +1,52 @@
+---
+- name: Verify k3s node is reachable
+  become: true
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+  register: k3s_get_nodes
+  retries: 60
+  delay: 5
+  until: k3s_get_nodes.rc == 0
+  changed_when: false
+
+- name: Show k3s nodes in wide format
+  become: true
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes -o wide
+  register: k3s_nodes_wide
+  changed_when: false
+
+- name: Capture raw node status
+  become: true
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes --no-headers
+  register: k3s_nodes_raw
+  changed_when: false
+
+- name: Assert the node is Ready
+  ansible.builtin.assert:
+    that:
+      - k3s_nodes_raw.stdout is search('Ready')
+    fail_msg: >-
+      The node is not Ready yet.
+      kubectl output:
+      {{ k3s_nodes_raw.stdout }}
+    success_msg: "The node is Ready."
+
+- name: Verify kubectl symlink is available
+  become: true
+  ansible.builtin.command: /usr/local/bin/kubectl version --client=true
+  register: kubectl_version
+  changed_when: false
+
+- name: Verify Helm is available
+  become: true
+  ansible.builtin.command: helm version --short
+  register: helm_version
+  changed_when: false
+
+- name: Show verification summary
+  ansible.builtin.debug:
+    msg:
+      - "k3s kubectl get nodes succeeded"
+      - "k3s kubectl get nodes -o wide:"
+      - "{{ k3s_nodes_wide.stdout }}"
+      - "kubectl version: {{ kubectl_version.stdout | default('unknown') }}"
+      - "helm version: {{ helm_version.stdout | default('unknown') }}"

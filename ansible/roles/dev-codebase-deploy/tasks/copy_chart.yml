@@ -1,0 +1,50 @@
+---
+- name: Show Helm chart source and target paths
+  ansible.builtin.debug:
+    msg:
+      - "Controller chart source: {{ helm_chart_src_dir }}"
+      - "Remote chart target: {{ helm_chart_dir }}"
+
+- name: Ensure chart source directory exists on Ansible controller
+  ansible.builtin.stat:
+    path: "{{ helm_chart_src_dir }}"
+  delegate_to: localhost
+  run_once: true
+  register: helm_chart_src_dir_stat
+
+- name: Fail if chart source directory is missing on controller
+  ansible.builtin.fail:
+    msg: "Helm chart source directory not found on controller: {{ helm_chart_src_dir }}"
+  when: not helm_chart_src_dir_stat.stat.exists
+
+- name: Ensure target Helm chart directory exists on VM
+  ansible.builtin.file:
+    path: "{{ helm_chart_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy Helm chart to VM
+  ansible.builtin.copy:
+    src: "{{ helm_chart_src_dir }}/"
+    dest: "{{ helm_chart_dir }}/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Remove non-experimental Helm values from VM
+  ansible.builtin.file:
+    path: "{{ helm_chart_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - values-staging.yaml
+    - values-production.yaml
+
+- name: Verify copied Helm chart exists on VM
+  ansible.builtin.stat:
+    path: "{{ helm_chart_dir }}/Chart.yaml"
+  register: helm_chart_file_stat
+
+- name: Fail if Helm chart was not copied correctly
+  ansible.builtin.fail:
+    msg: "Helm chart was not copied correctly to {{ helm_chart_dir }}"
+  when: not helm_chart_file_stat.stat.exists

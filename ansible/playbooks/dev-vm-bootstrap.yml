@@ -1,0 +1,22 @@
+---
+- name: Bootstrap dev VM for k3s
+  hosts: dev_vm
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Show bootstrap target
+      ansible.builtin.debug:
+        msg:
+          - "Starting dev VM bootstrap"
+          - "Node name: {{ node_name | default(inventory_hostname) }}"
+          - "k3s version: {{ k3s_version | default('v1.30.2+k3s1') }}"
+          - "Helm required: {{ helm_required | default(true) }}"
+
+  roles:
+    - role: dev-vm-bootstrap
+
+  post_tasks:
+    - name: Bootstrap completed
+      ansible.builtin.debug:
+        msg: "Dev VM bootstrap completed successfully."

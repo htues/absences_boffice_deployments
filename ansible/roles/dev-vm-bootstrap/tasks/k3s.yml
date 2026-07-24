@@ -1,0 +1,63 @@
+---
+- name: Set desired k3s version
+  ansible.builtin.set_fact:
+    k3s_version: "{{ k3s_version | default('v1.30.2+k3s1') }}"
+
+- name: Set desired node name
+  ansible.builtin.set_fact:
+    k3s_node_name: "{{ node_name | default(inventory_hostname) }}"
+
+- name: Check whether k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install k3s
+  become: true
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" INSTALL_K3S_EXEC="server --node-name {{ k3s_node_name }} --write-kubeconfig-mode 644" sh -
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/k3s
+  when: not k3s_binary.stat.exists
+
+- name: Ensure k3s service is enabled
+  become: true
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: true
+
+- name: Ensure k3s service is running
+  become: true
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+
+- name: Wait for k3s service to become active
+  become: true
+  ansible.builtin.command: systemctl is-active --quiet k3s
+  register: k3s_active
+  retries: 60
+  delay: 5
+  until: k3s_active.rc == 0
+  changed_when: false
+
+- name: Wait for k3s kubeconfig to appear
+  become: true
+  ansible.builtin.stat:
+    path: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig
+  retries: 60
+  delay: 5
+  until: k3s_kubeconfig.stat.exists
+  changed_when: false
+
+- name: Wait for Kubernetes API readiness through k3s
+  become: true
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+  register: k3s_nodes
+  retries: 60
+  delay: 5
+  until: k3s_nodes.rc == 0
+  changed_when: false

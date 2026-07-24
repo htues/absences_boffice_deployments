@@ -1,0 +1,63 @@
+---
+- name: Ensure required deployment flags are valid
+  ansible.builtin.assert:
+    that:
+      - deploy_database | bool or deploy_backend | bool or deploy_frontend | bool
+    fail_msg: "At least one component must be enabled."
+
+- name: Check that kubectl is installed on VM
+  ansible.builtin.command:
+    cmd: kubectl version --client=true
+  register: kubectl_version_check
+  changed_when: false
+
+- name: Check that helm is installed on VM
+  ansible.builtin.command:
+    cmd: helm version --short
+  register: helm_version_check
+  changed_when: false
+
+- name: Verify Kubernetes cluster is reachable
+  ansible.builtin.command:
+    cmd: kubectl cluster-info
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: kubectl_cluster_info_check
+  changed_when: false
+
+- name: Verify Helm can reach Kubernetes cluster
+  ansible.builtin.command:
+    cmd: helm list -A
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: helm_cluster_access_check
+  changed_when: false
+
+- name: Show kubectl version
+  ansible.builtin.debug:
+    msg: "{{ kubectl_version_check.stdout | default(kubectl_version_check.stderr, true) }}"
+
+- name: Show helm version
+  ansible.builtin.debug:
+    msg: "{{ helm_version_check.stdout | default(helm_version_check.stderr, true) }}"
+
+- name: Ensure namespace exists
+  ansible.builtin.shell: |
+    set -euo pipefail
+    kubectl create namespace "{{ namespace_name }}" --dry-run=client -o yaml | kubectl apply -f -
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+
+- name: Show deployment target summary
+  ansible.builtin.debug:
+    msg:
+      - "Application: {{ app_name }}"
+      - "Environment: {{ app_environment }}"
+      - "Namespace: {{ namespace_name }}"
+      - "Release: {{ release_name }}"
+      - "Helm chart: {{ helm_chart_dir }}"
+      - "Kubeconfig: {{ kubeconfig_path }}"
+      -

@@ -1,0 +1,46 @@
+---
+- name: Ensure kubectl symlink exists
+  become: true
+  ansible.builtin.file:
+    src: /usr/local/bin/k3s
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+
+- name: Check kubectl is available from k3s
+  become: true
+  ansible.builtin.command: /usr/local/bin/k3s kubectl version --client=true
+  register: kubectl_from_k3s
+  changed_when: false
+
+- name: Install Helm if missing
+  become: true
+  ansible.builtin.command: helm version --short
+  register: helm_check
+  changed_when: false
+  failed_when: false
+
+- name: Download Helm install script
+  become: true
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get-helm-3
+    mode: "0755"
+  when: helm_check.rc != 0
+
+- name: Install Helm
+  become: true
+  ansible.builtin.command: /tmp/get-helm-3
+  when: helm_check.rc != 0
+  changed_when: true
+
+- name: Verify Helm installation
+  ansible.builtin.command: helm version --short
+  register: helm_version
+  changed_when: false
+
+- name: Show tool versions
+  ansible.builtin.debug:
+    msg:
+      - "kubectl via k3s: {{ kubectl_from_k3s.stdout | default('unknown') }}"
+      - "helm: {{ helm_version.stdout | default('unknown') }}"

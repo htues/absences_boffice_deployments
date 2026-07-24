@@ -1,0 +1,263 @@
+---
+- name: Ensure at least one component is enabled
+  ansible.builtin.assert:
+    that:
+      - deploy_database | bool or deploy_backend | bool or deploy_frontend | bool or deploy_nginx | bool
+    fail_msg: "At least one component must be enabled."
+
+- name: Validate image tags for enabled components1
+  ansible.builtin.assert:
+    that:
+      - not deploy_database | bool or database_tag | length > 0
+      - not deploy_backend | bool or backend_tag | length > 0
+      - not deploy_frontend | bool or frontend_tag | length > 0
+      - not deploy_nginx | bool or nginx_tag | length > 0
+    fail_msg: >-
+      Image tags must be provided for every enabled component.
+      database_tag='{{ database_tag | default('') }}',
+      backend_tag='{{ backend_tag | default('') }}',
+      frontend_tag='{{ frontend_tag | default('') }}',
+      nginx_tag='{{ nginx_tag | default('') }}'.
+
+- name: Ensure Helm chart directory exists on VM
+  ansible.builtin.stat:
+    path: "{{ helm_chart_dir }}"
+  register: helm_chart_dir_stat
+
+- name: Fail if Helm chart directory is missing on VM
+  ansible.builtin.fail:
+    msg: "Helm chart directory not found on VM: {{ helm_chart_dir }}"
+  when: not helm_chart_dir_stat.stat.exists
+
+- name: Build Helm values for deployment
+  ansible.builtin.set_fact:
+    helm_values:
+      namespace: "{{ namespace_name }}"
+      appName: "{{ app_name }}"
+      environment: "{{ app_environment }}"
+      dbSecretName: "{{ db_secret_name }}"
+      dbSecretKey: "{{ db_secret_key }}"
+      deployDatabase: "{{ deploy_database | bool }}"
+      deployBackend: "{{ deploy_backend | bool }}"
+      deployFrontend: "{{ deploy_frontend | bool }}"
+      database:
+        image:
+          tag: "{{ database_tag | default('') }}"
+      backend:
+        image:
+          tag: "{{ backend_tag | default('') }}"
+      frontend:
+        image:
+          tag: "{{ frontend_tag | default('') }}"
+      nginx:
+        image:
+          tag: "{{ nginx_tag | default('') }}"
+      dockerHub:
+        username: "{{ docker_hub_username }}"
+        pat: "{{ docker_hub_pat }}"
+        email: "{{ docker_hub_email }}"
+      postgresPassword: "{{ postgres_password }}"
+      helm:
+        waitTimeout: "{{ helm_wait_timeout }}"
+        historyMax: "{{ helm_history_max }}"
+
+- name: Render Helm values file
+  ansible.builtin.copy:
+    dest: /tmp/{{ release_name }}-values.yaml
+    mode: "0600"
+    content: "{{ helm_values | to_nice_yaml(indent=2, sort_keys=False) }}"
+  no_log: true
+
+- name: Validate Helm chart before deployment
+  ansible.builtin.command:
+    cmd: helm lint "{{ helm_chart_dir }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: helm_lint_result
+  changed_when: false
+
+- name: Check existing Helm release status before deployment
+  ansible.builtin.command:
+    cmd: helm status "{{ release_name }}" -n "{{ namespace_name }}" -o json
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: helm_preflight_status
+  changed_when: false
+  failed_when: false
+
+- name: Extract existing Helm release status
+  ansible.builtin.set_fact:
+    helm_preflight_release_status: >-
+      {{
+        (
+          helm_preflight_status.stdout | default('{}') | from_json
+        ).info.status | default('')
+      }}
+  when: helm_preflight_status.rc == 0
+
+- name: Show existing Helm release status
+  ansible.builtin.debug:
+    msg:
+      - "Existing Helm release status: {{ helm_preflight_release_status | default('not-found') }}"
+      - "Helm status rc: {{ helm_preflight_status.rc }}"
+
+- name: Clean stuck Helm release before deployment
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    echo "Cleaning stuck Helm release {{ release_name }} in namespace {{ namespace_name }}..."
+
+    helm uninstall "{{ release_name }}" \
+      -n "{{ namespace_name }}" \
+      --wait \
+      --timeout 2m || true
+
+    kubectl delete secret \
+      -n "{{ namespace_name }}" \
+      -l "owner=helm,name={{ release_name }}" \
+      --ignore-not-found=true
+
+    echo "Stuck Helm release cleanup completed."
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: true
+  when:
+    - helm_preflight_release_status | default('') in ['pending-install', 'pending-upgrade', 'pending-rollback']
+
+- name: Deploy Helm release with diagnostics on failure
+  block:
+    - name: Deploy or upgrade Helm release
+      ansible.builtin.shell: |
+        set -euo pipefail
+        helm upgrade --install "{{ release_name }}" "{{ helm_chart_dir }}" \
+          --namespace "{{ namespace_name }}" \
+          --create-namespace \
+          -f /tmp/{{ release_name }}-values.yaml \
+          -f "{{ helm_chart_dir }}/values-experimental.yaml" \
+          --wait \
+          --atomic \
+          --timeout "{{ helm_wait_timeout }}" \
+          --history-max "{{ helm_history_max }}"
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: helm_release_result
+      changed_when: true
+
+  rescue:
+    - name: Show Helm release history after failure
+      ansible.builtin.command:
+        cmd: helm history "{{ release_name }}" -n "{{ namespace_name }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: helm_history_failure
+      changed_when: false
+      failed_when: false
+
+    - name: Show Helm release status after failure
+      ansible.builtin.command:
+        cmd: helm status "{{ release_name }}" -n "{{ namespace_name }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: helm_status_failure
+      changed_when: false
+      failed_when: false
+
+    - name: Show Kubernetes resources after Helm failure
+      ansible.builtin.shell: |
+        set -euo pipefail
+        echo "== Pods =="
+        kubectl get pods -n "{{ namespace_name }}" -o wide || true
+        echo
+        echo "== Services =="
+        kubectl get svc -n "{{ namespace_name }}" -o wide || true
+        echo
+        echo "== Deployments =="
+        kubectl get deploy -n "{{ namespace_name }}" -o wide || true
+        echo
+        echo "== StatefulSets =="
+        kubectl get statefulset -n "{{ namespace_name }}" -o wide || true
+        echo
+        echo "== PVCs =="
+        kubectl get pvc -n "{{ namespace_name }}" -o wide || true
+        echo
+        echo "== Recent events =="
+        kubectl get events -n "{{ namespace_name }}" --sort-by='.lastTimestamp' | tail -80 || true
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: k8s_failure_summary
+      changed_when: false
+      failed_when: false
+
+    - name: Describe non-running pods after Helm failure
+      ansible.builtin.shell: |
+        set -euo pipefail
+        PODS="$(kubectl get pods -n "{{ namespace_name }}" --no-headers 2>/dev/null | awk '$3 != "Running" && $3 != "Completed" {print $1}' || true)"
+        if [[ -z "${PODS}" ]]; then
+          echo "No non-running pods found."
+          exit 0
+        fi
+
+        for pod in ${PODS}; do
+          echo "=============================="
+          echo "Describe pod: ${pod}"
+          echo "=============================="
+          kubectl describe pod "${pod}" -n "{{ namespace_name }}" || true
+        done
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: failed_pod_descriptions
+      changed_when: false
+      failed_when: false
+
+    - name: Print Helm and Kubernetes failure diagnostics
+      ansible.builtin.debug:
+        msg:
+          - "Helm deploy failed."
+          - "Helm history:"
+          - "{{ helm_history_failure.stdout | default(helm_history_failure.stderr, true) | default('N/A') }}"
+          - "Helm status:"
+          - "{{ helm_status_failure.stdout | default(helm_status_failure.stderr, true) | default('N/A') }}"
+          - "Kubernetes summary:"
+          - "{{ k8s_failure_summary.stdout | default('N/A') }}"
+          - "Failed pod descriptions:"
+          - "{{ failed_pod_descriptions.stdout | default('N/A') }}"
+
+    - name: Fail deployment after diagnostics
+      ansible.builtin.fail:
+        msg: "Helm deployment failed. See diagnostics above."
+
+- name: Check Helm release status
+  ansible.builtin.command:
+    cmd: "helm status {{ release_name }} -n {{ namespace_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: helm_status_result
+  changed_when: false
+
+- name: Show Helm release status
+  ansible.builtin.debug:
+    msg:
+      - "Release: {{ release_name }}"
+      - "Namespace: {{ namespace_name }}"
+      - "Chart: {{ helm_chart_dir }}"
+      - "Database enabled: {{ deploy_database | bool }}"
+      - "Backend enabled: {{ deploy_backend | bool }}"
+      - "Frontend enabled: {{ deploy_frontend | bool }}"
+      - "Database tag: {{ database_tag | default('') }}"
+      - "Backend tag: {{ backend_tag | default('') }}"
+      - "Frontend tag: {{ frontend_tag | default('') }}"
+      - "Nginx tag: {{ nginx_tag | default('') }}"
+
+- name: Remove temporary Helm values file
+  ansible.builtin.file:
+    path: /tmp/{{ release_name }}-values.yaml
+    state: absent
+  when: helm_release_result is defined

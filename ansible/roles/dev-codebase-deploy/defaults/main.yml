@@ -1,0 +1,37 @@
+---
+app_name: abo
+app_environment: exp
+
+helm_chart_dir: /opt/dev-codebase/helm-chart-app
+helm_chart_src_dir: "{{ role_path }}/../../../helm-chart-app"
+namespace_name: "{{ app_name }}-{{ app_environment }}"
+release_name: "{{ app_name }}-{{ app_environment }}"
+
+kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+
+db_secret_name: absencesbocred
+db_secret_key: POSTGRES_PASSWORD
+
+aws_region: us-east-2
+aws_db_secret_id: absencesbocred
+aws_db_secret_key: POSTGRES_PASSWORD
+aws_db_secret_is_json: true
+
+deploy_database: true
+deploy_backend: true
+deploy_frontend: true
+deploy_nginx: true
+
+database_tag: ""
+backend_tag: ""
+frontend_tag: ""
+nginx_tag: ""
+
+docker_hub_username: ""
+docker_hub_pat: ""
+docker_hub_email: ""
+
+postgres_password: ""
+
+helm_wait_timeout: 15m
+helm_history_max: 10

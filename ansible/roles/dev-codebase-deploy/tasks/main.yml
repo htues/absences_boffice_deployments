@@ -1,0 +1,87 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - app_name is defined
+      - app_environment is defined
+      - helm_chart_dir is defined
+      - db_secret_name is defined
+      - db_secret_key is defined
+      - deploy_database is defined
+      - deploy_backend is defined
+      - deploy_frontend is defined
+      - docker_hub_username is defined
+      - docker_hub_pat is defined
+      - docker_hub_email is defined
+      - postgres_password is defined
+      - helm_wait_timeout is defined
+      - helm_history_max is defined
+      - aws_region is defined
+      - aws_db_secret_id is defined
+      - aws_db_secret_key is defined
+      - aws_db_secret_is_json is defined
+    fail_msg: "One or more required deployment variables are missing."
+
+- name: Validate required Docker Hub secret values are non-empty
+  ansible.builtin.assert:
+    that:
+      - docker_hub_username | length > 0
+      - docker_hub_pat | length > 0
+      - docker_hub_email | length > 0
+    fail_msg: "One or more Docker Hub secret values are empty. Check GitHub environment secrets."
+
+- name: Fetch JSON database secret from AWS Secrets Manager when needed
+  ansible.builtin.set_fact:
+    postgres_password: >-
+      {{
+        (
+          lookup(
+            'amazon.aws.aws_secret',
+            aws_db_secret_id,
+            region=aws_region
+          ) | from_json
+        )[aws_db_secret_key]
+      }}
+  when:
+    - deploy_database | bool or deploy_backend | bool
+    - postgres_password | length == 0
+    - aws_db_secret_is_json | bool
+  no_log: true
+
+- name: Fetch plain text database secret from AWS Secrets Manager when needed
+  ansible.builtin.set_fact:
+    postgres_password: >-
+      {{
+        lookup(
+          'amazon.aws.aws_secret',
+          aws_db_secret_id,
+          region=aws_region
+        )
+      }}
+  when:
+    - deploy_database | bool or deploy_backend | bool
+    - postgres_password | length == 0
+    - not aws_db_secret_is_json | bool
+  no_log: true
+
+- name: Validate required database secret value is non-empty
+  ansible.builtin.assert:
+    that:
+      - postgres_password | length > 0
+    fail_msg: "Postgres password is empty. Check AWS Secrets Manager secret/key configuration."
+  when: deploy_database | bool or deploy_backend | bool
+
+- name: Include preflight tasks
+  ansible.builtin.include_tasks: prereqs.yml
+
+- name: Copy Helm Chart to the VM
+  ansible.builtin.include_tasks: copy_chart.yml
+
+- name: Include secret management tasks
+  ansible.builtin.include_tasks: secrets.yml
+
+- name: Include Helm deployment tasks
+  ansible.builtin.include_tasks: deploy.yml
+
+- name: Include verification tasks
+  ansible.builtin.include_tasks: verify.yml

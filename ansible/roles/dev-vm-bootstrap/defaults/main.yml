@@ -1,0 +1,7 @@
+---
+k3s_version: "v1.30.2+k3s1"
+node_name: ""
+helm_required: true
+bootstrap_user: "ubuntu"
+kubectl_path: "/usr/local/bin/kubectl"
+k3s_path: "/usr/local/bin/k3s"

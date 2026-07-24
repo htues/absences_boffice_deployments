@@ -1,0 +1,97 @@
+---
+- name: Phase 1 - update apt metadata
+  ansible.builtin.debug:
+    msg: "[PHASE 1] Updating apt metadata"
+
+- name: Update apt cache
+  become: true
+  ansible.builtin.raw: |
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+  changed_when: false
+
+- name: Phase 1 - install base packages
+  ansible.builtin.debug:
+    msg: "[PHASE 1] Installing base packages"
+
+- name: Install base packages
+  become: true
+  ansible.builtin.raw: |
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y curl tar gzip ca-certificates python3 python3-apt
+  changed_when: false
+
+- name: Phase 2 - configure kernel prerequisites
+  ansible.builtin.debug:
+    msg: "[PHASE 2] Configuring kernel modules and sysctl"
+
+- name: Ensure /etc/modules-load.d exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/modules-load.d
+    state: directory
+    mode: "0755"
+
+- name: Ensure /etc/sysctl.d exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    state: directory
+    mode: "0755"
+
+- name: Declare k3s kernel modules
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k3s.conf
+    content: |
+      overlay
+      br_netfilter
+    mode: "0644"
+
+- name: Load overlay kernel module
+  become: true
+  ansible.builtin.command: modprobe overlay
+  changed_when: false
+  failed_when: false
+
+- name: Load br_netfilter kernel module
+  become: true
+  ansible.builtin.command: modprobe br_netfilter
+  changed_when: false
+  failed_when: false
+
+- name: Configure sysctl for k3s
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-k3s.conf
+    content: |
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+    mode: "0644"
+
+- name: Apply sysctl settings
+  become: true
+  ansible.builtin.command: sysctl --system
+  register: sysctl_apply
+  changed_when: false
+
+- name: Phase 3 - install bootstrap extras
+  ansible.builtin.debug:
+    msg: "[PHASE 3] Installing bootstrap extras"
+
+- name: Install bootstrap extras
+  become: true
+  ansible.builtin.raw: |
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y socat conntrack jq iptables
+  changed_when: false
+
+- name: Ensure ubuntu home directory exists
+  become: true
+  ansible.builtin.file:
+    path: /home/ubuntu
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
