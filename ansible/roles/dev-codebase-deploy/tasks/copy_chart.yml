@@ -31,11 +31,12 @@
     group: root
     mode: preserve
 
-- name: Remove non-experimental Helm values from VM
+- name: Remove non-dev Helm values from VM
   ansible.builtin.file:
     path: "{{ helm_chart_dir }}/{{ item }}"
     state: absent
   loop:
+    - values-experimental.yaml
     - values-staging.yaml
     - values-production.yaml
 

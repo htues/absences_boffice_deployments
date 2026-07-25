@@ -1,6 +1,6 @@
 ---
 app_name: abo
-app_environment: exp
+app_environment: dev
 
 helm_chart_dir: /opt/dev-codebase/helm-chart-app
 helm_chart_src_dir: "{{ role_path }}/../../../helm-chart-app"

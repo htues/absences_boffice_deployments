@@ -135,7 +135,7 @@
           --namespace "{{ namespace_name }}" \
           --create-namespace \
           -f /tmp/{{ release_name }}-values.yaml \
-          -f "{{ helm_chart_dir }}/values-experimental.yaml" \
+          -f "{{ helm_chart_dir }}/values-dev.yaml" \
           --wait \
           --atomic \
           --timeout "{{ helm_wait_timeout }}" \
