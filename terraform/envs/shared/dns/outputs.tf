@@ -15,7 +15,7 @@ output "route53_name_servers" {
 
 output "route53_record_names" {
   description = "Route53 DNS record names created for the shared application target"
-  value       = concat([for record in aws_route53_record.application : record.fqdn], [aws_route53_record.verification.fqdn])
+  value       = [for record in aws_route53_record.application : record.fqdn]
 }
 
 output "application_urls" {
