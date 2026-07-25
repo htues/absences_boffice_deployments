@@ -1,6 +1,6 @@
 aws_region   = "us-east-2"
 project_name = "absencesbo"
-environment  = "experimental"
+environment  = "dev"
 
 # Keep administrative access closed by default.
 allowed_k3s_cidrs = []

@@ -12,11 +12,11 @@ variable "project_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "experimental"
+  default     = "dev"
 
   validation {
-    condition     = contains(["experimental"], var.environment)
-    error_message = "Environment must be 'experimental' for the dev stack."
+    condition     = contains(["dev"], var.environment)
+    error_message = "Environment must be 'dev' for the dev stack."
   }
 }
 

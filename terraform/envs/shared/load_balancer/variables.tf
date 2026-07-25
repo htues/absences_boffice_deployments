@@ -34,7 +34,7 @@ variable "aws_region" {
 variable "target_environment" {
   description = "Environment name used to discover the target instance"
   type        = string
-  default     = "experimental"
+  default     = "dev"
 }
 
 variable "target_component" {
