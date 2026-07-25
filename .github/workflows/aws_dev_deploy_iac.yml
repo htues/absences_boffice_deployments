@@ -8,12 +8,12 @@ on:
         required: true
         type: string
       environment:
-        description: "Environment to deploy (experimental only for dev)"
+        description: "Environment to deploy (dev only)"
         required: true
         type: choice
         options:
-          - experimental
-        default: experimental
+          - dev
+        default: dev
       debug_oidc:
         description: "Print OIDC token claims to logs (DANGEROUS)"
         required: false
