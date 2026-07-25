@@ -1,0 +1,153 @@
+# Default values for monitoring-stack
+# This file contains the default configuration for the monitoring stack
+
+# Global configuration
+global:
+  environment: base
+  project: absencesbo
+  cluster_name: absencesbo-cluster
+
+# Prometheus Stack Configuration (includes Prometheus + Grafana + AlertManager)
+prometheus:
+  enabled: true
+
+prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      # Storage configuration
+      retention: 30d
+      retentionSize: 10GB
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            # Prefer gp3 on EKS; set empty ("") to use the cluster default StorageClass.
+            storageClassName: gp3
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+
+      # Resource limits
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+
+      # Operator selector behavior (be explicit; we will label our ServiceMonitors/Rules accordingly)
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+
+  grafana:
+    enabled: true
+
+    # Do NOT store a real password in Git.
+    # Inject at deploy time (CI/CD) via:
+    # --set prometheus-stack.grafana.adminPassword=<GRAFANA_ADMIN_PASSWORD>
+    adminPassword: ""
+
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: gp3
+
+    service:
+      type: ClusterIP
+      port: 80
+
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+    defaultDashboardsEnabled: true
+
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: "default"
+            orgId: 1
+            folder: ""
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+
+    dashboards:
+      default:
+        kubernetes-cluster:
+          gnetId: 7249
+          revision: 1
+          datasource: Prometheus
+        node-exporter:
+          gnetId: 1860
+          revision: 31
+          datasource: Prometheus
+        kubernetes-pods:
+          gnetId: 6417
+          revision: 1
+          datasource: Prometheus
+
+  alertmanager:
+    enabled: true
+    config:
+      global:
+        smtp_smarthost: "localhost:587"
+        smtp_from: "alertmanager@tamayo.com"
+      route:
+        group_by: ["alertname"]
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 1h
+        receiver: "web.hook"
+      receivers:
+        - name: "web.hook"
+          webhook_configs:
+            - url: "http://127.0.0.1:5001/"
+
+  nodeExporter:
+    enabled: true
+
+  kubeStateMetrics:
+    enabled: true
+
+  kubeApiServer:
+    enabled: true
+  kubelet:
+    enabled: true
+  kubeControllerManager:
+    enabled: true
+  coreDns:
+    enabled: true
+  kubeEtcd:
+    enabled: true
+  kubeScheduler:
+    enabled: true
+
+# Standalone Grafana (alternative to the one in prometheus-stack)
+grafana:
+  standalone:
+    enabled: false
+
+# Custom application monitoring (these values require chart templates that create ServiceMonitors/Rules)
+application:
+  monitoring:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      # Common place to tune scrape behavior. Environment overrides can patch these.
+      interval: 30s
+      scrapeTimeout: 10s
+      labels:
+        app: absencesbo
+      endpoints:
+        - port: http
+          path: /metrics

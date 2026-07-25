@@ -1,0 +1,202 @@
+# Default values
+# Declare variables to be substituted into your templates.
+
+global:
+  environment: base
+  imagePullSecrets:
+  - name: regcred
+
+database:
+  enabled: true
+  image:
+    repository: hftamayo/pgdevelopment
+    pullPolicy: IfNotPresent
+  deployment:
+    replicas: 1
+    strategy:
+      type: Recreate
+  service:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+  auth:
+    database: absencesbo
+    username: sebastic
+
+    # Preferred path:
+    # - Create this Secret via External Secrets (synced from AWS Secrets Manager)
+    # - Put POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB/POSTGRES_HOST/POSTGRES_PORT keys in it
+    existingSecret: "absencesbocred"
+
+    # Fallback path (ONLY if existingSecret is empty):
+    # password MUST be explicitly set, Helm won't auto-generate it anymore
+    password: ""
+
+  security:
+    # IMPORTANT: official postgres images can be sensitive to forced runAsUser (permissions on /var/lib/postgresql/data).
+    # Leave these unset unless you know your image/PVC permissions are compatible.
+    enabled: false
+    runAsNonRoot: false
+    runAsUser: null
+    fsGroup: null
+
+backend:
+  enabled: true
+  image:
+    repository: hftamayo/absencesbobe
+    pullPolicy: IfNotPresent
+  deployment:
+    replicas: 1
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  metrics:
+    enabled: false # backend doesn't expose metrics yet
+    port: "" # if empty -> falls back to service.targetPort
+    path: "/metrics"
+
+  # Non-sensitive runtime config (rendered into configmap-env.yaml)
+  seedEnabled: true
+  paginationMethod: "offset"
+  frontendOrigins:
+    - http://localhost
+    - http://localhost:8041
+
+frontend:
+  enabled: true
+  host: 0.0.0.0
+  port: 8041
+  image:
+    repository: hftamayo/absencesbofe
+    pullPolicy: IfNotPresent
+  deployment:
+    replicas: 1
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8041
+  metrics:
+    enabled: false
+    port: "" # if empty -> falls back to service.targetPort
+    path: "/metrics"
+
+nginx:
+  enabled: true
+  image:
+    repository: hftamayo/nginxk8s
+    pullPolicy: IfNotPresent
+  deployment:
+    replicas: 1
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+  service:
+    type: NodePort
+    port: 80
+    targetPort: 80
+    nodePort: 32322
+    externalTrafficPolicy: Cluster
+    annotations: {}
+    # externalTrafficPolicy: Local  # only meaningful for LoadBalancer/NodePort
+  upstreams:
+    frontendPort: 80
+    backendPort: 8080
+    frontendHost: ""
+    backendHost: ""
+  metrics:
+    enabled: false # nginx does not expose metrics yet
+    port: "" # if empty -> falls back to service.targetPort
+    path: "/metrics"
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+healthChecks:
+  enabled: true
+  backend:
+    startup:
+      path: /actuator/health/readiness
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    readiness:
+      path: /actuator/health/readiness
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      path: /actuator/health/liveness
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+  frontend:
+    startup:
+      path: /healthz
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 24
+    readiness:
+      path: /healthz
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+  nginx:
+    startup:
+      path: /healthz
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 24
+    readiness:
+      path: /healthz
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+security:
+  # Used for stateless workloads (nginx/backend) in current templates.
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+monitoring:
+  prometheus:
+    # Turn off by default until you actually expose metrics endpoints.
+    scrape: false

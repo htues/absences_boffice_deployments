@@ -1,0 +1,21 @@
+global:
+  environment: dev
+
+backend:
+  # Non-sensitive runtime setup overrides
+  executionMode: "development"
+  frontendOrigins:
+    - http://localhost
+    - http://localhost:8041
+    - https://dev.tamayo.dev/absencesbo
+
+nginx:
+  upstreams:
+    frontendPort: 80
+    backendPort: 8080
+
+healthChecks:
+  enabled: false
+
+security:
+  enabled: false

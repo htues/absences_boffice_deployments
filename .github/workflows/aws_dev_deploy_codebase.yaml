@@ -1,0 +1,493 @@
+name: AWS_DEV_DEPLOY_CODEBASE
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type 'deploy' to confirm"
+        required: true
+        type: string
+
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+
+      deploy_database:
+        description: "Deploy/Update database component"
+        required: false
+        type: boolean
+        default: true
+
+      deploy_backend:
+        description: "Deploy/Update backend component"
+        required: false
+        type: boolean
+        default: true
+
+      deploy_frontend:
+        description: "Deploy/Update frontend component"
+        required: false
+        type: boolean
+        default: true
+
+      deploy_nginx:
+        description: "Deploy/Update nginx component"
+        required: false
+        type: boolean
+        default: true
+
+      database_tag:
+        description: "Override database.image.tag to deploy"
+        required: false
+        type: string
+        default: "0.0.1"
+
+      backend_tag:
+        description: "Override backend.image.tag to deploy"
+        required: false
+        type: string
+        default: "0.0.1"
+
+      frontend_tag:
+        description: "Override frontend.image.tag to deploy"
+        required: false
+        type: string
+        default: "0.0.1"
+
+      nginx_tag:
+        description: "Override nginx.image.tag to deploy"
+        required: false
+        type: string
+        default: "0.0.1"
+
+  workflow_call:
+    inputs:
+      confirmation:
+        required: true
+        type: string
+
+      environment:
+        required: true
+        type: string
+
+      deploy_database:
+        required: false
+        type: boolean
+        default: true
+
+      deploy_backend:
+        required: false
+        type: boolean
+        default: true
+
+      deploy_frontend:
+        required: false
+        type: boolean
+        default: true
+
+      deploy_nginx:
+        required: false
+        type: boolean
+        default: true
+
+      database_tag:
+        required: false
+        type: string
+        default: "0.0.1"
+
+      backend_tag:
+        required: false
+        type: string
+        default: "0.0.1"
+
+      frontend_tag:
+        required: false
+        type: string
+        default: "0.0.1"
+
+      nginx_tag:
+        required: false
+        type: string
+        default: "0.0.1"
+
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/envs/dev/**"
+      - "k8s/helm/helm-chart-app/**"
+      - "ansible/playbooks/dev-codebase-deploy.yml"
+      - "ansible/roles/dev-codebase-deploy/**"
+      - ".github/workflows/aws_dev_deploy_codebase.yaml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  APP_NAME: ${{ vars.APP_NAME || 'absencesbo' }}
+
+  APP_ENVIRONMENT: ${{ inputs.environment || 'experimental' }}
+  DEPLOY_DATABASE: ${{ inputs.deploy_database || true }}
+  DEPLOY_BACKEND: ${{ inputs.deploy_backend || true }}
+  DEPLOY_FRONTEND: ${{ inputs.deploy_frontend || true }}
+  DEPLOY_NGINX: ${{ inputs.deploy_nginx || true }}
+  DATABASE_TAG: ${{ inputs.database_tag || '0.0.1' }}
+  BACKEND_TAG: ${{ inputs.backend_tag || '0.0.1' }}
+  FRONTEND_TAG: ${{ inputs.frontend_tag || '0.0.1' }}
+  NGINX_TAG: ${{ inputs.nginx_tag || '0.0.1' }}
+
+  BUCKET_NAME: ${{ vars.APP_NAME || 'absencesbo' }}-terraform-state
+
+  DB_SECRET_NAME: ${{ vars.DB_SECRET_NAME || 'absencesbocred' }}
+  AWS_DB_SECRET_ID: ${{ vars.AWS_DB_SECRET_ID || vars.DB_SECRET_NAME || 'absencesbocred' }}
+  AWS_DB_SECRET_KEY: ${{ vars.AWS_DB_SECRET_KEY || 'POSTGRES_PASSWORD' }}
+
+  DEV_COMPONENT_TAG: "dev"
+  HELM_CHART_DIR: "devops/helm-chart-app-dev"
+
+concurrency:
+  group: AWS_DEV_DEPLOY_CODEBASE-${{ inputs.environment || 'experimental' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: ${{ inputs.environment || 'experimental' }}
+
+    steps:
+      - name: Guardrail - confirmation
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != "deploy" ]]; then
+            echo "Confirmation failed. You must type 'deploy'."
+            exit 1
+          fi
+
+      - name: Validate component selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          if [[ "${DEPLOY_DATABASE}" == "true" ]]; then
+            exit 0
+          fi
+          
+          if [[ "${DEPLOY_BACKEND}" == "true" ]]; then
+            exit 0
+          fi
+          
+          if [[ "${DEPLOY_FRONTEND}" == "true" ]]; then
+            exit 0
+          fi
+          
+          if [[ "${DEPLOY_NGINX}" == "true" ]]; then
+            exit 0
+          fi
+          
+          echo "At least one component must be enabled."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS identity + region
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+          CURRENT_REGION="${AWS_DEFAULT_REGION:-$(aws configure get region)}"
+          if [[ "$CURRENT_REGION" != "${AWS_REGION}" ]]; then
+            echo "Wrong region configured: $CURRENT_REGION. Must be ${AWS_REGION}"
+            exit 1
+          fi
+
+      - name: Discover target dev VM
+        id: discover_vm
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          INSTANCE_INFO="$(aws ec2 describe-instances \
+            --region "${AWS_REGION}" \
+            --filters \
+              "Name=tag:Project,Values=${APP_NAME}" \
+              "Name=tag:Environment,Values=${APP_ENVIRONMENT}" \
+              "Name=tag:Component,Values=${DEV_COMPONENT_TAG}" \
+              "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].{InstanceId:InstanceId,PublicIpAddress:PublicIpAddress}' \
+            --output json 2>/dev/null || true)"
+
+          INSTANCE_ID="$(echo "${INSTANCE_INFO}" | jq -r '.InstanceId // empty')"
+          PUBLIC_IP="$(echo "${INSTANCE_INFO}" | jq -r '.PublicIpAddress // empty')"
+
+          if [[ -z "${INSTANCE_ID}" ]]; then
+            echo "Could not find a running dev VM instance."
+            aws ec2 describe-instances \
+              --region "${AWS_REGION}" \
+              --filters \
+                "Name=tag:Project,Values=${APP_NAME}" \
+                "Name=tag:Environment,Values=${APP_ENVIRONMENT}" \
+                "Name=tag:Component,Values=${DEV_COMPONENT_TAG}" \
+              --query 'Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,PrivateIp:PrivateIpAddress,PublicIp:PublicIpAddress}' \
+              --output table || true
+            exit 1
+          fi
+
+          if [[ -z "${PUBLIC_IP}" ]]; then
+            echo "Could not resolve public IP for the dev VM."
+            exit 1
+          fi
+
+          echo "instance_id=${INSTANCE_ID}" >> "$GITHUB_OUTPUT"
+          echo "public_ip=${PUBLIC_IP}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify SSM is online
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSTANCE_ID="${{ steps.discover_vm.outputs.instance_id }}"
+
+          echo "Waiting for SSM to be online for ${INSTANCE_ID}..."
+          SSM_STATUS=""
+          for i in {1..45}; do
+            SSM_STATUS="$(aws ssm describe-instance-information \
+              --region "${AWS_REGION}" \
+              --filters "Key=InstanceIds,Values=${INSTANCE_ID}" \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null || true)"
+
+            if [[ "${SSM_STATUS}" == "Online" ]]; then
+              echo "SSM is online."
+              break
+            fi
+
+            echo "Waiting for SSM... (${i}/45)"
+            sleep 10
+          done
+
+          if [[ "${SSM_STATUS}" != "Online" ]]; then
+            echo "Instance never became available in SSM."
+            aws ssm describe-instance-information \
+              --region "${AWS_REGION}" \
+              --filters "Key=InstanceIds,Values=${INSTANCE_ID}" \
+              --query 'InstanceInformationList[].{InstanceId:InstanceId,PingStatus:PingStatus,PlatformName:PlatformName,AgentVersion:AgentVersion,AssociationStatus:AssociationStatus}' \
+              --output table || true
+            exit 1
+          fi
+
+      - name: Build dynamic inventory for dev VM
+        shell: bash
+        env:
+          INVENTORY_PATH: terraform/dev/inventory.ini
+          INSTANCE_ID: ${{ steps.discover_vm.outputs.instance_id }}
+          PUBLIC_IP: ${{ steps.discover_vm.outputs.public_ip }}
+          BUCKET_NAME: ${{ env.BUCKET_NAME }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          cd devops
+          
+          echo "Inventory source values:"
+          echo "PWD=$(pwd)"
+          echo "INSTANCE_ID=${INSTANCE_ID}"
+          echo "PUBLIC_IP=${PUBLIC_IP}"
+          echo "INVENTORY_PATH=${INVENTORY_PATH}"
+          
+          if [[ -z "${INSTANCE_ID}" ]]; then
+            echo "INSTANCE_ID is empty; cannot build SSM inventory."
+            exit 1
+          fi
+          
+          mkdir -p "$(dirname "${INVENTORY_PATH}")"
+          
+          {
+            printf '%s\n' '[dev_vm]'
+            printf 'dev-node ansible_host=%s ansible_connection=community.aws.aws_ssm ansible_aws_ssm_bucket_name=%s ansible_aws_ssm_region=%s\n' \
+              "${INSTANCE_ID}" \
+              "${BUCKET_NAME}" \
+              "${AWS_REGION}"
+          } > "${INVENTORY_PATH}"
+          
+          echo "Generated inventory:"
+          cat "${INVENTORY_PATH}"
+          
+          test -f "${INVENTORY_PATH}" || {
+            echo "Inventory file was not created: ${INVENTORY_PATH}"
+            exit 1
+          }
+
+      - name: Setup Ansible virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 -m venv .venv-ansible
+          source .venv-ansible/bin/activate
+
+          python -m pip install --upgrade pip
+          pip install "ansible-core==2.17.13" boto3 botocore
+          ansible-galaxy collection install \
+            "amazon.aws:==9.2.0" \
+            "community.aws:==9.0.0" \
+            "community.general:==10.3.0"
+
+          echo "VENV_PYTHON=$PWD/.venv-ansible/bin/python" >> "$GITHUB_ENV"
+          echo "VENV_ANSIBLE=$PWD/.venv-ansible/bin/ansible" >> "$GITHUB_ENV"
+          echo "VENV_ANSIBLE_PLAYBOOK=$PWD/.venv-ansible/bin/ansible-playbook" >> "$GITHUB_ENV"
+
+      - name: Safecheck - verify Ansible virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          if [[ -z "${VENV_PYTHON:-}" || -z "${VENV_ANSIBLE:-}" || -z "${VENV_ANSIBLE_PLAYBOOK:-}" ]]; then
+            echo "Ansible virtualenv variables are not set."
+            exit 1
+          fi
+          
+          if [[ ! -x "${VENV_PYTHON}" ]]; then
+            echo "VENV_PYTHON is not executable: ${VENV_PYTHON}"
+            exit 1
+          fi
+          
+          if [[ ! -x "${VENV_ANSIBLE}" ]]; then
+            echo "VENV_ANSIBLE is not executable: ${VENV_ANSIBLE}"
+            exit 1
+          fi
+          
+          if [[ ! -x "${VENV_ANSIBLE_PLAYBOOK}" ]]; then
+            echo "VENV_ANSIBLE_PLAYBOOK is not executable: ${VENV_ANSIBLE_PLAYBOOK}"
+            exit 1
+          fi
+          
+          echo "Using Ansible Python:"
+          "${VENV_PYTHON}" -c "import sys; print(sys.executable)"
+          
+          echo "Checking boto3/botocore:"
+          "${VENV_PYTHON}" -c "import boto3, botocore; print('boto3:', boto3.__version__); print('botocore:', botocore.__version__)"
+          
+          echo "Checking Ansible version:"
+          "${VENV_ANSIBLE_PLAYBOOK}" --version
+          
+          echo "Checking chart candidates:"
+          find . -maxdepth 4 -name Chart.yaml -print
+
+      - name: Verify AWS database secret is readable
+        shell: bash
+        env:
+          AWS_DB_SECRET_ID: ${{ env.AWS_DB_SECRET_ID }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          
+          aws secretsmanager describe-secret \
+            --region "${AWS_REGION}" \
+            --secret-id "${AWS_DB_SECRET_ID}" \
+            --query '{Name:Name,ARN:ARN}' \
+            --output table
+
+      - name: Run Ansible deployment on VM
+        shell: bash
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          APP_NAME: ${{ env.APP_NAME }}
+          APP_ENVIRONMENT: ${{ env.APP_ENVIRONMENT }}
+          AWS_DB_SECRET_ID: ${{ env.AWS_DB_SECRET_ID }}
+          AWS_DB_SECRET_KEY: ${{ env.AWS_DB_SECRET_KEY }}
+          HELM_CHART_DIR: /opt/dev-codebase/helm-chart-app
+          INVENTORY_PATH: terraform/dev/inventory.ini
+
+          DEPLOY_DATABASE: ${{ env.DEPLOY_DATABASE }}
+          DEPLOY_BACKEND: ${{ env.DEPLOY_BACKEND  }}
+          DEPLOY_FRONTEND: ${{ env.DEPLOY_FRONTEND }}
+          DEPLOY_NGINX: ${{ env.DEPLOY_NGINX }}
+
+          DATABASE_TAG: ${{ env.DATABASE_TAG }}
+          BACKEND_TAG: ${{ env.BACKEND_TAG }}
+          FRONTEND_TAG: ${{ env.FRONTEND_TAG }}
+          NGINX_TAG: ${{ env.NGINX_TAG }}
+
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_PAT: ${{ secrets.DOCKER_HUB_PAT }}
+          DOCKER_HUB_EMAIL: ${{ secrets.DOCKER_HUB_EMAIL }}
+        run: |
+          set -euo pipefail
+          cd devops
+
+          HELM_CHART_SRC_DIR="$PWD/helm-chart-app"
+
+          echo "PWD=$PWD"
+          echo "Inventory path: ${INVENTORY_PATH}"
+          echo "Remote chart target: ${HELM_CHART_DIR}"
+          echo "Local chart source: ${HELM_CHART_SRC_DIR}"
+          echo "AWS DB secret id: ${AWS_DB_SECRET_ID}"
+          echo "AWS DB secret key: ${AWS_DB_SECRET_KEY}"
+          echo "Checking chart candidates:"
+          find . -maxdepth 3 -name Chart.yaml -print
+
+          test -f "${INVENTORY_PATH}" || { echo "Inventory file missing: ${INVENTORY_PATH}"; exit 1; }
+          test -f "${HELM_CHART_SRC_DIR}/Chart.yaml" || { echo "Chart.yaml missing at ${HELM_CHART_SRC_DIR}/Chart.yaml"; exit 1; }
+
+          export ANSIBLE_CONFIG="$PWD/ansible.cfg"
+
+          "${VENV_ANSIBLE_PLAYBOOK}" \
+            -i "${INVENTORY_PATH}" \
+            playbooks/dev-codebase-deploy.yml \
+            -e "app_name=${APP_NAME}" \
+            -e "app_environment=${APP_ENVIRONMENT}" \
+            -e "aws_region=${AWS_REGION}" \
+            -e "aws_db_secret_id=${AWS_DB_SECRET_ID}" \
+            -e "aws_db_secret_key=${AWS_DB_SECRET_KEY}" \
+            -e "aws_db_secret_is_json=true" \
+            -e "helm_chart_dir=${HELM_CHART_DIR}" \
+            -e "helm_chart_src_dir=${HELM_CHART_SRC_DIR}" \
+            -e "deploy_database=${DEPLOY_DATABASE}" \
+            -e "deploy_backend=${DEPLOY_BACKEND}" \
+            -e "deploy_frontend=${DEPLOY_FRONTEND}" \
+            -e "deploy_nginx=${DEPLOY_NGINX}" \
+            -e "database_tag=${DATABASE_TAG}" \
+            -e "backend_tag=${BACKEND_TAG}" \
+            -e "frontend_tag=${FRONTEND_TAG}" \
+            -e "nginx_tag=${NGINX_TAG}" \
+            -e "docker_hub_username=${DOCKER_HUB_USERNAME}" \
+            -e "docker_hub_pat=${DOCKER_HUB_PAT}" \
+            -e "docker_hub_email=${DOCKER_HUB_EMAIL}"
+
+      - name: Deployment summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Dev VM + Helm Deployment Status"
+            echo ""
+            echo "| Item | Value |"
+            echo "| ---- | ----- |"
+            echo "| Job Status | ${{ job.status }} |"
+            echo "| Cluster | EC2 + k3s |"
+            echo "| Region | ${AWS_REGION} |"
+            echo "| Environment | ${APP_ENVIRONMENT} |"
+            echo "| deploy_database | ${DEPLOY_DATABASE} |"
+            echo "| deploy_backend | ${DEPLOY_BACKEND} |"
+            echo "| deploy_frontend | ${DEPLOY_FRONTEND} |"
+            echo "| deploy_nginx | ${DEPLOY_NGINX} |"
+            echo "| database_tag | ${DATABASE_TAG} |"
+            echo "| backend_tag | ${BACKEND_TAG} |"
+            echo "| frontend_tag | ${FRONTEND_TAG} |"
+            echo "| nginx_tag | ${NGINX_TAG} |"
+          } >> "$GITHUB_STEP_SUMMARY"

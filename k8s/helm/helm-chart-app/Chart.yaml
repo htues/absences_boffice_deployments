@@ -1,0 +1,18 @@
+apiVersion: v2
+name: absencesbo
+description: Absences BackOffice platform (nginx + frontend + backend + database)
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - absences
+  - nginx
+  - frontend
+  - backend
+  - database
+home: https://github.com/htues/absences_boffice_deployments
+sources:
+  - https://github.com/htues/absences_boffice_deployments
+maintainers:
+  - name: htues
+    email: herbert.fernandez@ues.edu.sv

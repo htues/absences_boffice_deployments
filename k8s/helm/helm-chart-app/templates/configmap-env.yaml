@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Release.Name }}-env"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+    environment: "{{ .Values.global.environment }}"
+data:
+  APP_ENV: {{ .Values.global.environment | quote }}
+  EXECUTION_MODE: {{ .Values.backend.executionMode | default "development" | quote }}
+  DOCKER_INTERNAL_PORT: {{ .Values.backend.service.targetPort | default .Values.backend.service.port | toString | quote }}
+  SEED_ENABLED: {{ .Values.backend.seedEnabled | default false | toString | quote }}
+  PAGINATION_METHOD: {{ .Values.backend.paginationMethod | default "offset" | quote }}
+  FRONTEND_ORIGINS: {{ .Values.backend.frontendOrigins | default "" | quote }}
+  POSTGRES_HOST: {{ printf "%s-database" .Release.Name | quote }}
+  POSTGRES_PORT: {{ .Values.database.service.port | default 5432 | toString | quote }}
+  POSTGRES_DB: {{ .Values.database.auth.database | default "absencesbo" | quote }}
+  POSTGRES_USER: {{ .Values.database.auth.username | default "app" | quote }}

@@ -1,0 +1,13 @@
+{{- if .Values.application.monitoring.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitoring-stack.fullname" . }}-dashboard-absencesbo
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{ include "monitoring-stack.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  absencesbo-app.json: |
+    {{ (.Files.Get "dashboards/absencesbo-app.json") | nindent 4 }}
+{{- end -}}

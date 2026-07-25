@@ -1,0 +1,18 @@
+global:
+  environment: stg
+
+database:
+  enabled: false
+
+backend:
+  # Non-sensitive runtime setup overrides
+  executionMode: "staging"
+  seedEnabled: false
+  paginationMethod: "offset"
+  frontendOrigins:
+    - https://stg.tamayo.dev/absencesbo
+
+nginx:
+  upstreams:
+    frontendPort: 80
+    backendPort: 8080
