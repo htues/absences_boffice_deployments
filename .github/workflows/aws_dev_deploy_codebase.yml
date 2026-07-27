@@ -123,6 +123,7 @@ on:
       - "ansible/playbooks/dev-codebase-deploy.yml"
       - "ansible/roles/dev-codebase-deploy/**"
       - "aws_dev_deploy_codebase.yml"
+      - ".github/workflows/aws_dev_deploy_codebase.yml"
 
 permissions:
   contents: read
