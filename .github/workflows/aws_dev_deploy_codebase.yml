@@ -66,9 +66,9 @@ on:
 
       debug_oidc:
         description: "Print OIDC token claims to logs (DANGEROUS)"
-        required: false
+        required: true
         type: boolean
-        default: false
+        default: true
 
   workflow_call:
     inputs:
@@ -121,9 +121,9 @@ on:
         default: "0.0.1"
 
       debug_oidc:
-        required: false
+        required: true
         type: boolean
-        default: false
+        default: true
 
   push:
     branches:
