@@ -37,19 +37,20 @@
       environment: "{{ app_environment }}"
       dbSecretName: "{{ db_secret_name }}"
       dbSecretKey: "{{ db_secret_key }}"
-      deployDatabase: "{{ deploy_database | bool }}"
-      deployBackend: "{{ deploy_backend | bool }}"
-      deployFrontend: "{{ deploy_frontend | bool }}"
       database:
+        enabled: "{{ deploy_database | bool }}"
         image:
           tag: "{{ database_tag | default('') }}"
       backend:
+        enabled: "{{ deploy_backend | bool }}"
         image:
           tag: "{{ backend_tag | default('') }}"
       frontend:
+        enabled: "{{ deploy_frontend | bool }}"
         image:
           tag: "{{ frontend_tag | default('') }}"
       nginx:
+        enabled: "{{ deploy_nginx | bool }}"
         image:
           tag: "{{ nginx_tag | default('') }}"
       dockerHub:
@@ -134,8 +135,8 @@
         helm upgrade --install "{{ release_name }}" "{{ helm_chart_dir }}" \
           --namespace "{{ namespace_name }}" \
           --create-namespace \
-          -f /tmp/{{ release_name }}-values.yaml \
           -f "{{ helm_chart_dir }}/values-dev.yaml" \
+          -f /tmp/{{ release_name }}-values.yaml \        
           --wait \
           --atomic \
           --timeout "{{ helm_wait_timeout }}" \
