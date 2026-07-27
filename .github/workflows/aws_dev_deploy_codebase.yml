@@ -122,7 +122,7 @@ on:
       - "k8s/helm/helm-chart-app/**"
       - "ansible/playbooks/dev-codebase-deploy.yml"
       - "ansible/roles/dev-codebase-deploy/**"
-      - ".github/workflows/aws_dev_deploy_codebase.yaml"
+      - "aws_dev_deploy_codebase.yml"
 
 permissions:
   contents: read
@@ -294,14 +294,13 @@ jobs:
       - name: Build dynamic inventory for dev VM
         shell: bash
         env:
-          INVENTORY_PATH: terraform/dev/inventory.ini
+          INVENTORY_PATH: terraform/envs/dev/inventory.ini
           INSTANCE_ID: ${{ steps.discover_vm.outputs.instance_id }}
           PUBLIC_IP: ${{ steps.discover_vm.outputs.public_ip }}
           BUCKET_NAME: ${{ env.BUCKET_NAME }}
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           set -euo pipefail
-          cd devops
           
           echo "Inventory source values:"
           echo "PWD=$(pwd)"
@@ -411,7 +410,7 @@ jobs:
           AWS_DB_SECRET_ID: ${{ env.AWS_DB_SECRET_ID }}
           AWS_DB_SECRET_KEY: ${{ env.AWS_DB_SECRET_KEY }}
           HELM_CHART_DIR: /opt/dev-codebase/helm-chart-app
-          INVENTORY_PATH: terraform/dev/inventory.ini
+          INVENTORY_PATH: terraform/envs/dev/inventory.ini
 
           DEPLOY_DATABASE: ${{ env.DEPLOY_DATABASE }}
           DEPLOY_BACKEND: ${{ env.DEPLOY_BACKEND  }}
@@ -430,7 +429,7 @@ jobs:
           set -euo pipefail
           cd devops
 
-          HELM_CHART_SRC_DIR="$PWD/helm-chart-app"
+          HELM_CHART_SRC_DIR="$PWD/k8s/helm/helm-chart-app"
 
           echo "PWD=$PWD"
           echo "Inventory path: ${INVENTORY_PATH}"
@@ -448,7 +447,7 @@ jobs:
 
           "${VENV_ANSIBLE_PLAYBOOK}" \
             -i "${INVENTORY_PATH}" \
-            playbooks/dev-codebase-deploy.yml \
+            ansible/playbooks/dev-codebase-deploy.yml \
             -e "app_name=${APP_NAME}" \
             -e "app_environment=${APP_ENVIRONMENT}" \
             -e "aws_region=${AWS_REGION}" \
