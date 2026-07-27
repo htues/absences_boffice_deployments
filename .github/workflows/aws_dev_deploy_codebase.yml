@@ -430,6 +430,7 @@ jobs:
       - name: Run Ansible deployment on VM
         shell: bash
         env:
+          ANSIBLE_ROLES_PATH: ansible/roles
           AWS_REGION: ${{ env.AWS_REGION }}
           APP_NAME: ${{ env.APP_NAME }}
           APP_ENVIRONMENT: ${{ env.APP_ENVIRONMENT }}
@@ -453,6 +454,9 @@ jobs:
           DOCKER_HUB_EMAIL: ${{ secrets.DOCKER_HUB_EMAIL }}
         run: |
           set -euo pipefail
+
+          echo "ANSIBLE_ROLES_PATH=${ANSIBLE_ROLES_PATH}"
+          test -d "${ANSIBLE_ROLES_PATH}/dev-codebase-deploy"          
 
           HELM_CHART_SRC_DIR="$PWD/k8s/helm/helm-chart-app"
 
