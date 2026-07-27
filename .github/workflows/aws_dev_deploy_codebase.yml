@@ -453,7 +453,6 @@ jobs:
           DOCKER_HUB_EMAIL: ${{ secrets.DOCKER_HUB_EMAIL }}
         run: |
           set -euo pipefail
-          cd devops
 
           HELM_CHART_SRC_DIR="$PWD/k8s/helm/helm-chart-app"
 
