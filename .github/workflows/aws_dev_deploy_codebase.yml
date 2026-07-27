@@ -64,6 +64,12 @@ on:
         type: string
         default: "0.0.1"
 
+      debug_oidc:
+        description: "Print OIDC token claims to logs (DANGEROUS)"
+        required: false
+        type: boolean
+        default: false
+
   workflow_call:
     inputs:
       confirmation:
@@ -113,6 +119,11 @@ on:
         required: false
         type: string
         default: "0.0.1"
+
+      debug_oidc:
+        required: false
+        type: boolean
+        default: false
 
   push:
     branches:
@@ -200,6 +211,20 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: (Optional) Debug OIDC token claims
+        if: ${{ inputs.debug_oidc }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+            core.info(`aud=${payload.aud}`);
+            core.info(`sub=${payload.sub}`);
+            core.info(`iss=${payload.iss}`);
+            core.info(`repository=${payload.repository}`);
+            core.info(`workflow_ref=${payload.workflow_ref}`);
+            core.info(`job_workflow_ref=${payload.job_workflow_ref}`);
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
