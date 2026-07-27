@@ -125,16 +125,16 @@ on:
         type: boolean
         default: true
 
-  push:
-    branches:
-      - main
-    paths:
-      - "terraform/envs/dev/**"
-      - "k8s/helm/helm-chart-app/**"
-      - "ansible/playbooks/dev-codebase-deploy.yml"
-      - "ansible/roles/dev-codebase-deploy/**"
-      - "aws_dev_deploy_codebase.yml"
-      - ".github/workflows/aws_dev_deploy_codebase.yml"
+#  push:
+#    branches:
+#      - main
+#    paths:
+#      - "terraform/envs/dev/**"
+#      - "k8s/helm/helm-chart-app/**"
+#      - "ansible/playbooks/dev-codebase-deploy.yml"
+#      - "ansible/roles/dev-codebase-deploy/**"
+#      - "aws_dev_deploy_codebase.yml"
+#      - ".github/workflows/aws_dev_deploy_codebase.yml"
 
 permissions:
   contents: read
