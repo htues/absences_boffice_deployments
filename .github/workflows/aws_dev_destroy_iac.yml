@@ -31,9 +31,14 @@ env:
   PROJECT_NAME: ${{ vars.APP_NAME || 'absencesbo' }}
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
   ENVIRONMENT: ${{ inputs.environment }}
+  APP_NODEPORT: "32322"
 
   BUCKET_NAME: ${{ (vars.APP_NAME || 'absencesbo') }}-terraform-state
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  ACM_STATE_KEY: "shared/acm/terraform.tfstate"
+  LB_STATE_KEY: "shared/load_balancer/terraform.tfstate"
+  DNS_STATE_KEY: "shared/dns/terraform.tfstate"
+  ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.environment }}
@@ -98,6 +103,8 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=terraform/envs/dev fmt -check -recursive
+          terraform -chdir=terraform/envs/shared/load_balancer fmt -check
+          terraform -chdir=terraform/envs/shared/dns fmt -check
 
       - name: Ensure S3 State Bucket Exists
         shell: bash
@@ -109,7 +116,103 @@ jobs:
           chmod +x terraform/envs/shared/scripts/bootstrap-tf-backend.sh
           terraform/envs/shared/scripts/bootstrap-tf-backend.sh verify
 
-      - name: Terraform init
+      - name: Detect edge state files
+        id: edge_state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          check_state_file() {
+            local key="$1"
+            if aws s3api head-object --bucket "${BUCKET_NAME}" --key "${key}" >/dev/null 2>&1; then
+              echo "true"
+            else
+              echo "false"
+            fi
+          }
+
+          HAS_DNS_STATE="$(check_state_file "${DNS_STATE_KEY}")"
+          HAS_LB_STATE="$(check_state_file "${LB_STATE_KEY}")"
+          HAS_ROUTE53_STATE="$(check_state_file "${ROUTE53_STATE_KEY}")"
+
+          echo "has_dns_state=${HAS_DNS_STATE}" >> "$GITHUB_OUTPUT"
+          echo "has_lb_state=${HAS_LB_STATE}" >> "$GITHUB_OUTPUT"
+          echo "has_route53_state=${HAS_ROUTE53_STATE}" >> "$GITHUB_OUTPUT"
+
+          echo "Detected states -> DNS: ${HAS_DNS_STATE}, LB: ${HAS_LB_STATE}, Route53: ${HAS_ROUTE53_STATE}"
+
+          if [[ "${HAS_DNS_STATE}" == "true" && ( "${HAS_LB_STATE}" != "true" || "${HAS_ROUTE53_STATE}" != "true" ) ]]; then
+            echo "DNS state exists but LB/Route53 state is missing; cannot safely destroy shared DNS artifacts."
+            exit 1
+          fi
+
+      - name: Terraform init - DNS
+        if: ${{ steps.edge_state.outputs.has_dns_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/dns init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.DNS_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - DNS
+        if: ${{ steps.edge_state.outputs.has_dns_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/dns validate
+
+      - name: Terraform destroy - DNS
+        if: ${{ steps.edge_state.outputs.has_dns_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/dns destroy -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="route53_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="route53_state_key=${{ env.ROUTE53_STATE_KEY }}" \
+            -var="route53_state_region=${{ env.AWS_REGION }}" \
+            -var="lb_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="lb_state_key=${{ env.LB_STATE_KEY }}" \
+            -var="lb_state_region=${{ env.AWS_REGION }}"
+
+      - name: Terraform init - Load Balancer
+        if: ${{ steps.edge_state.outputs.has_lb_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/load_balancer init -reconfigure \
+            -backend-config="bucket=${{ env.BUCKET_NAME }}" \
+            -backend-config="key=${{ env.LB_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate - Load Balancer
+        if: ${{ steps.edge_state.outputs.has_lb_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/load_balancer validate
+
+      - name: Terraform destroy - Load Balancer
+        if: ${{ steps.edge_state.outputs.has_lb_state == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/envs/shared/load_balancer destroy -auto-approve \
+            -var="project_name=${{ env.PROJECT_NAME }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="app_nodeport=${{ env.APP_NODEPORT }}" \
+            -var="acm_state_bucket=${{ env.BUCKET_NAME }}" \
+            -var="acm_state_key=${{ env.ACM_STATE_KEY }}" \
+            -var="acm_state_region=${{ env.AWS_REGION }}"
+
+      - name: Terraform init - Dev
         shell: bash
         run: |
           set -euo pipefail
@@ -119,7 +222,7 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="encrypt=true"
 
-      - name: Terraform validate
+      - name: Terraform validate - Dev
         shell: bash
         run: |
           set -euo pipefail
@@ -147,9 +250,11 @@ jobs:
             echo "| Environment | ${{ env.ENVIRONMENT }} |"
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Region | ${{ env.AWS_REGION }} |"
-            echo "| Destroy Scope | Dev Compute + Network Artifacts |"
-            echo "| Destroyed | VM, VPC, EIP, EBS |"
+            echo "| Edge DNS State Found | ${{ steps.edge_state.outputs.has_dns_state || 'false' }} |"
+            echo "| Edge LB State Found | ${{ steps.edge_state.outputs.has_lb_state || 'false' }} |"
+            echo "| Destroy Scope | Edge DNS + Edge NLB + Dev Compute/Network Artifacts |"
+            echo "| Destroyed | DNS records (if state found), NLB resources (if state found), VM, VPC, NAT, EBS |"
             echo ""
             echo "### Note"
-            echo "Load Balancer and DNS records should be destroyed separately using the **AWS DESTROY EDGE IAC** workflow if needed."
+            echo "Route53 zone, ACM certificate, and shared instance access should be destroyed separately using the **AWS_DESTROY_DOMAIN_IAC** workflow if needed."
           } >> "$GITHUB_STEP_SUMMARY"
