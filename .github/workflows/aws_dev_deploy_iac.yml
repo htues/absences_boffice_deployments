@@ -52,7 +52,7 @@ env:
   K3S_VERSION: "v1.30.2+k3s1"
   NODE_NAME: ${{ vars.APP_NAME || 'absencesbo' }}-${{ inputs.environment }}-node
   APP_NODEPORT: "32322"
-  NLB_BACKEND_CIDR: "10.0.0.0/16"
+  NLB_BACKEND_CIDR: "0.0.0.0/0"
 
 concurrency:
   group: AWS_DEV_DEPLOY_IAC-${{ inputs.environment }}

@@ -9,7 +9,7 @@ allowed_k3s_cidrs = []
 allowed_web_cidrs = ["0.0.0.0/0"]
 
 # Keep the NLB backend/health-check path to app_nodeport reachable from inside the VPC.
-allowed_nodeport_cidrs = ["10.0.0.0/16"]
+allowed_nodeport_cidrs = ["0.0.0.0/0"]
 
 # Network sizing.
 vpc_cidr           = "10.0.0.0/16"
