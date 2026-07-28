@@ -257,11 +257,10 @@ jobs:
               "Name=tag:Environment,Values=${APP_ENVIRONMENT}" \
               "Name=tag:Component,Values=${DEV_COMPONENT_TAG}" \
               "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].{InstanceId:InstanceId,PublicIpAddress:PublicIpAddress}' \
+            --query 'Reservations[0].Instances[0].{InstanceId:InstanceId}' \
             --output json 2>/dev/null || true)"
 
           INSTANCE_ID="$(echo "${INSTANCE_INFO}" | jq -r '.InstanceId // empty')"
-          PUBLIC_IP="$(echo "${INSTANCE_INFO}" | jq -r '.PublicIpAddress // empty')"
 
           if [[ -z "${INSTANCE_ID}" ]]; then
             echo "Could not find a running dev VM instance."
@@ -276,13 +275,7 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "${PUBLIC_IP}" ]]; then
-            echo "Could not resolve public IP for the dev VM."
-            exit 1
-          fi
-
           echo "instance_id=${INSTANCE_ID}" >> "$GITHUB_OUTPUT"
-          echo "public_ip=${PUBLIC_IP}" >> "$GITHUB_OUTPUT"
 
       - name: Verify SSM is online
         shell: bash
@@ -323,7 +316,6 @@ jobs:
         env:
           INVENTORY_PATH: terraform/envs/dev/inventory.ini
           INSTANCE_ID: ${{ steps.discover_vm.outputs.instance_id }}
-          PUBLIC_IP: ${{ steps.discover_vm.outputs.public_ip }}
           BUCKET_NAME: ${{ env.BUCKET_NAME }}
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
@@ -332,7 +324,6 @@ jobs:
           echo "Inventory source values:"
           echo "PWD=$(pwd)"
           echo "INSTANCE_ID=${INSTANCE_ID}"
-          echo "PUBLIC_IP=${PUBLIC_IP}"
           echo "INVENTORY_PATH=${INVENTORY_PATH}"
           
           if [[ -z "${INSTANCE_ID}" ]]; then

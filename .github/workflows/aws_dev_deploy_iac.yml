@@ -65,7 +65,6 @@ jobs:
 
     outputs:
       instance_id: ${{ steps.terraform_outputs.outputs.instance_id }}
-      public_ip: ${{ steps.terraform_outputs.outputs.public_ip }}
       app_nodeport: ${{ steps.terraform_outputs.outputs.app_nodeport }}
 
     steps:
@@ -168,16 +167,10 @@ jobs:
           cd terraform/envs/dev
 
           INSTANCE_ID="$(terraform output -raw instance_id)"
-          PUBLIC_IP="$(terraform output -raw public_ip)"
           APP_NODEPORT="$(terraform output -raw app_nodeport)"
           
           if [[ -z "${INSTANCE_ID}" ]]; then
             echo "Terraform output instance_id is empty."
-            exit 1
-          fi
-
-          if [[ -z "${PUBLIC_IP}" ]]; then
-            echo "Terraform output public_ip is empty."
             exit 1
           fi
 
@@ -187,11 +180,9 @@ jobs:
           fi
 
           echo "INSTANCE_ID=${INSTANCE_ID}"
-          echo "PUBLIC_IP=${PUBLIC_IP}"
           echo "APP_NODEPORT=${APP_NODEPORT}"
 
           echo "instance_id=${INSTANCE_ID}" >> "$GITHUB_OUTPUT"
-          echo "public_ip=${PUBLIC_IP}" >> "$GITHUB_OUTPUT"
           echo "app_nodeport=${APP_NODEPORT}" >> "$GITHUB_OUTPUT"
 
       - name: Show application endpoint
@@ -200,7 +191,7 @@ jobs:
           set -euo pipefail
           
           echo "Instance ID: ${{ steps.terraform_outputs.outputs.instance_id }}"
-          echo "Public IP: ${{ steps.terraform_outputs.outputs.public_ip }}"
+          echo "Public IP: N/A (instance is private)"
           echo "NodePort: ${{ steps.terraform_outputs.outputs.app_nodeport }}"
           echo "Note: Load Balancer and DNS records are managed by the Edge IaC workflow."
 
@@ -272,13 +263,11 @@ jobs:
         env:
           INVENTORY_PATH: terraform/envs/dev/inventory.ini
           INSTANCE_ID: ${{ steps.terraform_outputs.outputs.instance_id }}
-          PUBLIC_IP: ${{ steps.terraform_outputs.outputs.public_ip }}
         run: |
           set -euo pipefail
 
           echo "Inventory source values:"
           echo "INSTANCE_ID=${INSTANCE_ID}"
-          echo "PUBLIC_IP=${PUBLIC_IP}"
 
           if [[ -z "${INSTANCE_ID}" ]]; then
             echo "INSTANCE_ID is empty; cannot build SSM inventory."
@@ -390,7 +379,7 @@ jobs:
             echo "| Region | ${{ env.AWS_REGION }} |"
             echo "| Project | ${{ env.PROJECT_NAME }} |"
             echo "| Instance ID | ${{ steps.terraform_outputs.outputs.instance_id || 'N/A' }} |"
-            echo "| Public IP | ${{ steps.terraform_outputs.outputs.public_ip || 'N/A' }} |"
+            echo "| Public IP | N/A (private node) |"
             echo "| App NodePort | ${{ steps.terraform_outputs.outputs.app_nodeport || 'N/A' }} |"
             echo "| K3s Version | ${{ env.K3S_VERSION }} |"
             echo ""

@@ -19,6 +19,33 @@ data "aws_subnet" "target" {
   id = data.aws_instance.target.subnet_id
 }
 
+data "aws_subnets" "public_in_target_vpc" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_subnet.target.vpc_id]
+  }
+
+  filter {
+    name   = "tag:Project"
+    values = [var.project_name]
+  }
+
+  filter {
+    name   = "tag:Environment"
+    values = [var.target_environment]
+  }
+
+  filter {
+    name   = "tag:Component"
+    values = [var.target_component]
+  }
+
+  filter {
+    name   = "tag:Tier"
+    values = ["public"]
+  }
+}
+
 data "terraform_remote_state" "acm" {
   backend = "s3"
 
@@ -33,7 +60,14 @@ resource "aws_lb" "application" {
   name               = "${local.name_prefix}-nlb"
   load_balancer_type = "network"
   internal           = false
-  subnets            = [data.aws_instance.target.subnet_id]
+  subnets            = sort(data.aws_subnets.public_in_target_vpc.ids)
+
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_subnets.public_in_target_vpc.ids) > 0
+      error_message = "No public subnets were found in the target VPC for the requested project/environment/component tags."
+    }
+  }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nlb"

@@ -53,6 +53,17 @@ variable "public_subnet_cidr" {
   }
 }
 
+variable "private_subnet_cidr" {
+  description = "CIDR block for the private subnet hosting the dev node"
+  type        = string
+  default     = "10.0.2.0/24"
+
+  validation {
+    condition     = can(cidrhost(var.private_subnet_cidr, 0))
+    error_message = "private_subnet_cidr must be a valid CIDR block."
+  }
+}
+
 variable "instance_type" {
   description = "EC2 instance type for the dev node"
   type        = string

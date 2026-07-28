@@ -68,6 +68,18 @@ resource "aws_subnet" "public" {
   })
 }
 
+resource "aws_subnet" "private" {
+  vpc_id                  = aws_vpc.dev.id
+  cidr_block              = var.private_subnet_cidr
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = false
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet"
+    Tier = "private"
+  })
+}
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.dev.id
 
@@ -84,6 +96,43 @@ resource "aws_route_table" "public" {
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
+}
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip"
+  })
+}
+
+resource "aws_nat_gateway" "dev" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+
+  depends_on = [aws_internet_gateway.dev]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat"
+  })
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.dev.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.dev.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt"
+  })
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
 }
 
 resource "aws_security_group" "dev" {
@@ -137,14 +186,13 @@ resource "aws_security_group" "dev" {
 }
 
 resource "aws_instance" "dev" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public.id
-  vpc_security_group_ids      = [aws_security_group.dev.id]
-  associate_public_ip_address = true
-  iam_instance_profile        = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.private.id
+  vpc_security_group_ids = [aws_security_group.dev.id]
+  iam_instance_profile   = data.terraform_remote_state.shared_instance_access.outputs.iam_instance_profile_name
 
-  depends_on = [aws_route_table_association.public]
+  depends_on = [aws_route_table_association.private]
 
   root_block_device {
     volume_type           = var.root_volume_type
@@ -162,19 +210,6 @@ resource "aws_instance" "dev" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2"
   })
-}
-
-resource "aws_eip" "dev" {
-  domain = "vpc"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-eip"
-  })
-}
-
-resource "aws_eip_association" "dev" {
-  instance_id   = aws_instance.dev.id
-  allocation_id = aws_eip.dev.id
 }
 
 resource "aws_ebs_volume" "dev_data" {
