@@ -8,9 +8,8 @@ allowed_k3s_cidrs = []
 # Public web access for the dev application.
 allowed_web_cidrs = ["0.0.0.0/0"]
 
-# Direct NodePort access should be closed by default.
-# The NLB targets app_nodeport internally; external users should normally use HTTP/HTTPS.
-allowed_nodeport_cidrs = []
+# Keep the NLB backend/health-check path to app_nodeport reachable from inside the VPC.
+allowed_nodeport_cidrs = ["10.0.0.0/16"]
 
 # Network sizing.
 vpc_cidr           = "10.0.0.0/16"

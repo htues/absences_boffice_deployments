@@ -53,6 +53,8 @@
         enabled: "{{ deploy_nginx | bool }}"
         image:
           tag: "{{ nginx_tag | default('') }}"
+        service:
+          nodePort: "{{ app_nodeport | int }}"
       dockerHub:
         username: "{{ docker_hub_username }}"
         pat: "{{ docker_hub_pat }}"

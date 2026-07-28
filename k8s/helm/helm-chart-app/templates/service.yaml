@@ -94,8 +94,8 @@ spec:
       protocol: TCP
       port: {{ .Values.nginx.service.port | int }}
       targetPort: {{ .Values.nginx.service.targetPort | int }}
-      {{- if and (eq .Values.nginx.service.type "NodePort") .Values.nginx.service.nodePort }}
-      nodePort: {{ .Values.nginx.service.nodePort | int }}
+      {{- if eq .Values.nginx.service.type "NodePort" }}
+      nodePort: {{ required "nginx.service.nodePort must be set when nginx.service.type=NodePort" .Values.nginx.service.nodePort | int }}
       {{- end }}
   type: "{{ .Values.nginx.service.type }}"
   {{- if .Values.nginx.service.externalTrafficPolicy }}

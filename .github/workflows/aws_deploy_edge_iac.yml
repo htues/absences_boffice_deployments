@@ -52,6 +52,7 @@ env:
   LB_STATE_KEY: "shared/load_balancer/terraform.tfstate"
   DNS_STATE_KEY: "shared/dns/terraform.tfstate"
   ROUTE53_STATE_KEY: "shared/route53/terraform.tfstate"
+  APP_NODEPORT: "32322"
 
 concurrency:
   group: AWS_DEPLOY_EDGE_IAC-${{ inputs.environment }}
@@ -149,6 +150,7 @@ jobs:
           terraform -chdir=terraform/envs/shared/load_balancer apply -auto-approve \
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="app_nodeport=${{ env.APP_NODEPORT }}" \
             -var="acm_state_bucket=${{ env.BUCKET_NAME }}" \
             -var="acm_state_key=${{ env.ACM_STATE_KEY }}" \
             -var="acm_state_region=${{ env.AWS_REGION }}"

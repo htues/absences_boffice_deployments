@@ -153,6 +153,7 @@ env:
   BACKEND_TAG: ${{ inputs.backend_tag || '0.0.1' }}
   FRONTEND_TAG: ${{ inputs.frontend_tag || '0.0.1' }}
   NGINX_TAG: ${{ inputs.nginx_tag || '0.0.1' }}
+  APP_NODEPORT: "32322"
 
   BUCKET_NAME: ${{ vars.APP_NAME || 'absencesbo' }}-terraform-state
 
@@ -448,6 +449,7 @@ jobs:
           BACKEND_TAG: ${{ env.BACKEND_TAG }}
           FRONTEND_TAG: ${{ env.FRONTEND_TAG }}
           NGINX_TAG: ${{ env.NGINX_TAG }}
+          APP_NODEPORT: ${{ env.APP_NODEPORT }}
 
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_PAT: ${{ secrets.DOCKER_HUB_PAT }}
@@ -489,6 +491,7 @@ jobs:
             -e "deploy_backend=${DEPLOY_BACKEND}" \
             -e "deploy_frontend=${DEPLOY_FRONTEND}" \
             -e "deploy_nginx=${DEPLOY_NGINX}" \
+            -e "app_nodeport=${APP_NODEPORT}" \
             -e "database_tag=${DATABASE_TAG}" \
             -e "backend_tag=${BACKEND_TAG}" \
             -e "frontend_tag=${FRONTEND_TAG}" \
@@ -518,4 +521,5 @@ jobs:
             echo "| backend_tag | ${BACKEND_TAG} |"
             echo "| frontend_tag | ${FRONTEND_TAG} |"
             echo "| nginx_tag | ${NGINX_TAG} |"
+            echo "| app_nodeport | ${APP_NODEPORT} |"
           } >> "$GITHUB_STEP_SUMMARY"

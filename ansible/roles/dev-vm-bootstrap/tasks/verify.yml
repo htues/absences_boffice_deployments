@@ -42,11 +42,20 @@
   register: helm_version
   changed_when: false
 
+- name: Assert app NodePort contract is valid
+  ansible.builtin.assert:
+    that:
+      - app_nodeport | int >= 30000
+      - app_nodeport | int <= 32767
+    fail_msg: "app_nodeport must be within Kubernetes NodePort range (30000-32767)."
+    success_msg: "app_nodeport contract is valid: {{ app_nodeport }}"
+
 - name: Show verification summary
   ansible.builtin.debug:
     msg:
       - "k3s kubectl get nodes succeeded"
       - "k3s kubectl get nodes -o wide:"
       - "{{ k3s_nodes_wide.stdout }}"
+      - "app_nodeport contract: {{ app_nodeport }}"
       - "kubectl version: {{ kubectl_version.stdout | default('unknown') }}"
       - "helm version: {{ helm_version.stdout | default('unknown') }}"

@@ -10,6 +10,8 @@ locals {
     },
     var.tags
   )
+
+  effective_nodeport_cidrs = length(var.allowed_nodeport_cidrs) > 0 ? var.allowed_nodeport_cidrs : [var.vpc_cidr]
 }
 
 data "aws_availability_zones" "available" {
@@ -114,11 +116,11 @@ resource "aws_security_group" "dev" {
   }
 
   ingress {
-    description = "Application Nodeport"
+    description = "Application NodePort (NLB backend + health checks)"
     from_port   = var.app_nodeport
     to_port     = var.app_nodeport
     protocol    = "tcp"
-    cidr_blocks = var.allowed_nodeport_cidrs
+    cidr_blocks = local.effective_nodeport_cidrs
   }
 
   egress {

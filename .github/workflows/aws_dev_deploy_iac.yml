@@ -51,6 +51,8 @@ env:
 
   K3S_VERSION: "v1.30.2+k3s1"
   NODE_NAME: ${{ vars.APP_NAME || 'absencesbo' }}-${{ inputs.environment }}-node
+  APP_NODEPORT: "32322"
+  NLB_BACKEND_CIDR: "10.0.0.0/16"
 
 concurrency:
   group: AWS_DEV_DEPLOY_IAC-${{ inputs.environment }}
@@ -154,7 +156,9 @@ jobs:
           terraform -chdir=terraform/envs/dev apply -auto-approve \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="environment=${{ env.ENVIRONMENT }}"
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="app_nodeport=${{ env.APP_NODEPORT }}" \
+            -var='allowed_nodeport_cidrs=["${{ env.NLB_BACKEND_CIDR }}"]'
 
       - name: Export Terraform outputs
         id: terraform_outputs
@@ -336,6 +340,7 @@ jobs:
             ansible/playbooks/dev-vm-bootstrap.yml \
             -e "k3s_version=${K3S_VERSION}" \
             -e "node_name=${NODE_NAME}" \
+            -e "app_nodeport=${APP_NODEPORT}" \
             -e "helm_required=true" \
             -e "ansible_python_interpreter=/usr/bin/python3" \
             --skip-tags never

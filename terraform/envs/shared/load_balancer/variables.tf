@@ -44,7 +44,7 @@ variable "target_component" {
 }
 
 variable "app_nodeport" {
-  description = "NodePort used by the application traffic path"
+  description = "NodePort used by the application traffic path (must match nginx.service.nodePort in the Helm chart)"
   type        = number
   default     = 32322
 

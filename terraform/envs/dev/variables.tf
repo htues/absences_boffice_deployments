@@ -100,13 +100,18 @@ variable "data_device_name" {
 }
 
 variable "allowed_nodeport_cidrs" {
-  description = "CIDR blocks allowed to access Kubernetes NodePort services directly"
+  description = "CIDR blocks allowed to access the nginx NodePort used by the NLB backend path"
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.allowed_nodeport_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "allowed_nodeport_cidrs must contain valid CIDR blocks."
+  }
 }
 
 variable "allowed_web_cidrs" {
-  description = "CIDR blocks allowed to access HTTP/HTTPS/NodePort services"
+  description = "CIDR blocks allowed to access HTTP/HTTPS services"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }

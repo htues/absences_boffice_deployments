@@ -26,6 +26,7 @@ database_tag: ""
 backend_tag: ""
 frontend_tag: ""
 nginx_tag: ""
+app_nodeport: 32322
 
 docker_hub_username: ""
 docker_hub_pat: ""
