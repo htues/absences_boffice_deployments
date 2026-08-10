@@ -148,16 +148,31 @@ jobs:
           set -euo pipefail
           terraform -chdir=terraform/envs/dev validate
 
-      - name: Terraform apply
+      - name: Debug Terraform CLI args
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/envs/dev apply -auto-approve \
+          env | sort | grep -E '^TF_|^TERRAFORM_' || true
+
+      - name: Terraform plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset TF_CLI_ARGS_apply
+          terraform -chdir=terraform/envs/dev plan \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="app_nodeport=${{ env.APP_NODEPORT }}" \
-            -var='allowed_nodeport_cidrs=["${{ env.NLB_BACKEND_CIDR }}"]'
+            -var='allowed_nodeport_cidrs=["${{ env.NLB_BACKEND_CIDR }}"]' \
+            -out=tfplan
+
+      - name: Terraform apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset TF_CLI_ARGS_apply
+          terraform -chdir=terraform/envs/dev apply -auto-approve tfplan
 
       - name: Export Terraform outputs
         id: terraform_outputs
