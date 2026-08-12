@@ -47,7 +47,39 @@
   ansible.builtin.debug:
     var: kubectl_pods_result.stdout_lines
 
-- name: Verify all pods are Running and containers are Ready
+- name: Wait for backend deployment rollout when enabled
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/{{ release_name }}-backend -n {{ namespace_name }} --timeout={{ helm_wait_timeout | default('5m') }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+  when: deploy_backend | bool
+
+- name: Wait for frontend deployment rollout when enabled
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/{{ release_name }}-frontend -n {{ namespace_name }} --timeout={{ helm_wait_timeout | default('5m') }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+  when: deploy_frontend | bool
+
+- name: Wait for nginx deployment rollout when enabled
+  ansible.builtin.command:
+    cmd: kubectl rollout status deployment/{{ release_name }}-nginx -n {{ namespace_name }} --timeout={{ helm_wait_timeout | default('5m') }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+  when: deploy_nginx | default(true) | bool
+
+- name: Wait for database statefulset rollout when enabled
+  ansible.builtin.command:
+    cmd: kubectl rollout status statefulset/{{ release_name }}-database -n {{ namespace_name }} --timeout={{ helm_wait_timeout | default('5m') }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: false
+  when: deploy_database | bool
+
+- name: Verify all active pods are Running and containers are Ready
   ansible.builtin.shell: |
     set -euo pipefail
 
@@ -58,35 +90,68 @@
       exit 1
     fi
 
-    kubectl get pods -n "{{ namespace_name }}" --no-headers | while read -r name ready status rest; do
-      ready_count="$(echo "${ready}" | cut -d/ -f1)"
-      total_count="$(echo "${ready}" | cut -d/ -f2)"
+    UNHEALTHY_PODS="$(
+      kubectl get pods -n "{{ namespace_name }}" -o json | \
+      "{{ ansible_python_interpreter | default('/usr/bin/python3') }}" -c '
+    import json
+    import sys
 
-      if [[ "${status}" != "Running" && "${status}" != "Completed" ]]; then
-        echo "Pod ${name} is not healthy. Status=${status}, Ready=${ready}"
-        exit 1
-      fi
+    data = json.load(sys.stdin)
+    unhealthy = []
 
-      if [[ "${ready_count}" != "${total_count}" ]]; then
-        echo "Pod ${name} containers are not all ready. Ready=${ready}, Status=${status}"
-        exit 1
-      fi
-    done
+    for pod in data.get("items", []):
+        metadata = pod.get("metadata", {})
+        status = pod.get("status", {})
+        spec = pod.get("spec", {})
 
-    echo "All pods in namespace {{ namespace_name }} are healthy."
+        name = metadata.get("name", "<unknown>")
+        deletion_timestamp = metadata.get("deletionTimestamp")
+        phase = status.get("phase", "")
+        restart_policy = spec.get("restartPolicy", "")
+
+        if deletion_timestamp:
+            continue
+
+        if phase == "Succeeded" and restart_policy != "Always":
+            continue
+
+        if phase != "Running":
+            unhealthy.append(f"{name}: phase={phase}")
+            continue
+
+        container_statuses = status.get("containerStatuses", [])
+        if not container_statuses:
+            unhealthy.append(f"{name}: no container statuses found")
+            continue
+
+        not_ready = [
+            container.get("name", "<unknown>")
+            for container in container_statuses
+            if not container.get("ready", False)
+        ]
+
+        if not_ready:
+            unhealthy.append(f"{name}: containers not ready={','.join(not_ready)}")
+
+    for item in unhealthy:
+        print(item)
+
+    sys.exit(1 if unhealthy else 0)
+    ' || true
+    )"
+
+    if [[ -n "${UNHEALTHY_PODS}" ]]; then
+      echo "Unhealthy active pods found:"
+      echo "${UNHEALTHY_PODS}"
+      exit 1
+    fi
+
+    echo "All active pods in namespace {{ namespace_name }} are healthy. Terminating rollout pods were ignored."
   args:
     executable: /bin/bash
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
-  register: pod_readiness_check
-  changed_when: false
-
-- name: Get pods as JSON for readiness parsing
-  ansible.builtin.command:
-    cmd: "kubectl get pods -n {{ namespace_name }} -o json"
-  environment:
-    KUBECONFIG: "{{ kubeconfig_path }}"
-  register: kubectl_pods_json_result
+  register: active_pods_health_result
   changed_when: false
 
 - name: Parse pod readiness information
