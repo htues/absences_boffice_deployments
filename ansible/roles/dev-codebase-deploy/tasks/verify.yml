@@ -154,6 +154,14 @@
   register: active_pods_health_result
   changed_when: false
 
+- name: Get pod readiness information as JSON
+  ansible.builtin.command:
+    cmd: "kubectl get pods -n {{ namespace_name }} -o json"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: kubectl_pods_json_result
+  changed_when: false
+
 - name: Parse pod readiness information
   ansible.builtin.set_fact:
     pod_health_report: "{{ kubectl_pods_json_result.stdout | from_json }}"
