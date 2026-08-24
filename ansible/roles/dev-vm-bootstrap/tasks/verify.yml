@@ -42,6 +42,41 @@
   register: helm_version
   changed_when: false
 
+- name: Verify ArgoCD namespace exists
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get namespace {{ argocd_namespace }}"
+  register: argocd_namespace_verify
+  changed_when: false
+  when: argocd_install_enabled | bool
+
+- name: Verify ArgoCD pods are running
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get pods -n {{ argocd_namespace }} --no-headers"
+  register: argocd_pods_verify
+  changed_when: false
+  when: argocd_install_enabled | bool
+
+- name: Assert ArgoCD pods are running
+  ansible.builtin.assert:
+    that:
+      - argocd_pods_verify.stdout is search('Running')
+      - argocd_pods_verify.stdout is not search('CrashLoopBackOff')
+      - argocd_pods_verify.stdout is not search('Error')
+      - argocd_pods_verify.stdout is not search('ImagePullBackOff')
+    fail_msg: >-
+      ArgoCD pods are not healthy.
+      kubectl output:
+      {{ argocd_pods_verify.stdout }}
+    success_msg: "ArgoCD pods are running."
+  when: argocd_install_enabled | bool
+
+- name: Verify argocd-server service exists
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get service argocd-server -n {{ argocd_namespace }}"
+  register: argocd_server_service_verify
+  changed_when: false
+  when: argocd_install_enabled | bool
+
 - name: Assert app NodePort contract is valid
   ansible.builtin.assert:
     that:
@@ -59,3 +94,7 @@
       - "app_nodeport contract: {{ app_nodeport }}"
       - "kubectl version: {{ kubectl_version.stdout | default('unknown') }}"
       - "helm version: {{ helm_version.stdout | default('unknown') }}"
+      - "ArgoCD enabled: {{ argocd_install_enabled }}"
+      - "ArgoCD namespace: {{ argocd_namespace if argocd_install_enabled else 'disabled' }}"
+      - "ArgoCD pods:"
+      - "{{ argocd_pods_verify.stdout | default('ArgoCD verification skipped') }}"
