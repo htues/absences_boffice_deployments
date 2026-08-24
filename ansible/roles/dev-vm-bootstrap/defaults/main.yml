@@ -6,3 +6,21 @@ app_nodeport: 32322
 bootstrap_user: "ubuntu"
 kubectl_path: "/usr/local/bin/kubectl"
 k3s_path: "/usr/local/bin/k3s"
+
+# ArgoCD bootstrap
+argocd_install_enabled: true
+argocd_namespace: "argocd"
+
+# Option A: install ArgoCD using official manifests
+argocd_install_method: "manifest"
+argocd_manifest_url: "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
+
+# Option B: install ArgoCD using Helm chart
+#argocd_helm_repo_name: "argo"
+#argocd_helm_repo_url: "https://argoproj.github.io/argo-helm"
+#argocd_helm_chart: "argo/argo-cd"
+#argocd_helm_chart_version: "8.3.0"
+#argocd_helm_release_name: "argocd"
+
+# Readiness wait
+argocd_wait_timeout_seconds: 300
