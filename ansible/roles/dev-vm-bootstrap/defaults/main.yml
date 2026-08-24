@@ -24,3 +24,9 @@ argocd_manifest_url: "https://raw.githubusercontent.com/argoproj/argo-cd/stable/
 
 # Readiness wait
 argocd_wait_timeout_seconds: 300
+
+# ArgoCD application bootstrap manifests
+argocd_apply_app_manifests: true
+argocd_project_manifest_path: "k8s/argocd/projects/absencesbo-project.yml"
+argocd_app_manifest_path: "k8s/argocd/envs/dev/absencesbo-dev-application.yml"
+argocd_namespace_manifest_path: "k8s/argocd/envs/dev/absencesbo-dev-namespace.yml"
