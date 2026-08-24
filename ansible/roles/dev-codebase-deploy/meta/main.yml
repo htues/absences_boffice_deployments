@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: dev-codebase-deploy
   author: absencesbo-devops
-  description: Deploy the AbsencesBO codebase to the dev VM via Ansible and Helm
+  description: Deploy the AbsencesBO codebase to the dev VM via Ansible, ArgoCD and Helm
   license: MIT
   min_ansible_version: "2.17"
 
