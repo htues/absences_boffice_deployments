@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: absencesbo
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: absencesbo
+spec:
+  description: Absences BackOffice applications
+
+  sourceRepos:
+    - https://github.com/htues/absences_boffice_deployments.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: absencesbo-dev
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

@@ -1,0 +1,192 @@
+---
+- name: Assert ArgoCD install method is supported
+  ansible.builtin.assert:
+    that:
+      - argocd_install_method == "manifest"
+    fail_msg: "Only argocd_install_method='manifest' is currently supported in this task."
+    success_msg: "ArgoCD install method is valid: {{ argocd_install_method }}"
+
+- name: Wait for k3s API to be reachable before installing ArgoCD
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get nodes"
+  register: argocd_k3s_api_check
+  retries: 60
+  delay: 5
+  until: argocd_k3s_api_check.rc == 0
+  changed_when: false
+
+- name: Create ArgoCD namespace
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl create namespace {{ argocd_namespace }}"
+  register: argocd_namespace_create
+  failed_when:
+    - argocd_namespace_create.rc != 0
+    - "'AlreadyExists' not in argocd_namespace_create.stderr"
+  changed_when: argocd_namespace_create.rc == 0
+
+- name: Install ArgoCD using official manifests
+  become: true
+  ansible.builtin.command: >-
+    {{ k3s_path }} kubectl apply
+    -n {{ argocd_namespace }}
+    -f {{ argocd_manifest_url }}
+  register: argocd_manifest_apply
+  changed_when: >-
+    'created' in argocd_manifest_apply.stdout
+    or 'configured' in argocd_manifest_apply.stdout
+    or 'unchanged' not in argocd_manifest_apply.stdout
+
+- name: Wait for ArgoCD deployments to be available
+  become: true
+  ansible.builtin.command: >-
+    {{ k3s_path }} kubectl wait
+    --namespace {{ argocd_namespace }}
+    --for=condition=Available
+    deployment
+    --all
+    --timeout={{ argocd_wait_timeout_seconds }}s
+  register: argocd_deployments_ready
+  changed_when: false
+
+---
+- name: Assert ArgoCD install method is supported
+  ansible.builtin.assert:
+    that:
+      - argocd_install_method == "manifest"
+    fail_msg: "Only argocd_install_method='manifest' is currently supported in this task."
+    success_msg: "ArgoCD install method is valid: {{ argocd_install_method }}"
+
+- name: Wait for k3s API to be reachable before installing ArgoCD
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get nodes"
+  register: argocd_k3s_api_check
+  retries: 60
+  delay: 5
+  until: argocd_k3s_api_check.rc == 0
+  changed_when: false
+
+- name: Create ArgoCD namespace
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl create namespace {{ argocd_namespace }}"
+  register: argocd_namespace_create
+  failed_when:
+    - argocd_namespace_create.rc != 0
+    - "'AlreadyExists' not in argocd_namespace_create.stderr"
+  changed_when: argocd_namespace_create.rc == 0
+
+- name: Install ArgoCD using official manifests
+  become: true
+  ansible.builtin.command: >-
+    {{ k3s_path }} kubectl apply
+    -n {{ argocd_namespace }}
+    -f {{ argocd_manifest_url }}
+  register: argocd_manifest_apply
+  changed_when: >-
+    'created' in argocd_manifest_apply.stdout
+    or 'configured' in argocd_manifest_apply.stdout
+    or 'unchanged' not in argocd_manifest_apply.stdout
+
+- name: Wait for ArgoCD deployments to be available
+  become: true
+  ansible.builtin.command: >-
+    {{ k3s_path }} kubectl wait
+    --namespace {{ argocd_namespace }}
+    --for=condition=Available
+    deployment
+    --all
+    --timeout={{ argocd_wait_timeout_seconds }}s
+  register: argocd_deployments_ready
+  changed_when: false
+
+- name: Wait for ArgoCD pods to be ready
+  become: true
+  ansible.builtin.command: >-
+    {{ k3s_path }} kubectl wait
+    --namespace {{ argocd_namespace }}
+    --for=condition=Ready
+    pod
+    --all
+    --timeout={{ argocd_wait_timeout_seconds }}s
+  register: argocd_pods_ready
+  changed_when: false
+
+- name: Create temporary directory for ArgoCD app manifests
+  become: true
+  ansible.builtin.file:
+    path: /tmp/argocd-app-bootstrap
+    state: directory
+    mode: "0755"
+  when: argocd_apply_app_manifests | bool
+
+- name: Copy ArgoCD project manifest to VM
+  become: true
+  ansible.builtin.copy:
+    src: "{{ argocd_project_manifest_path }}"
+    dest: /tmp/argocd-app-bootstrap/absencesbo-project.yml
+    mode: "0644"
+  when: argocd_apply_app_manifests | bool
+
+- name: Copy ArgoCD application namespace manifest to VM
+  become: true
+  ansible.builtin.copy:
+    src: "{{ argocd_namespace_manifest_path }}"
+    dest: /tmp/argocd-app-bootstrap/absencesbo-dev-namespace.yml
+    mode: "0644"
+  when: argocd_apply_app_manifests | bool
+
+- name: Copy ArgoCD application manifest to VM
+  become: true
+  ansible.builtin.copy:
+    src: "{{ argocd_app_manifest_path }}"
+    dest: /tmp/argocd-app-bootstrap/absencesbo-dev-application.yml
+    mode: "0644"
+  when: argocd_apply_app_manifests | bool
+
+- name: Apply ArgoCD project manifest
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl apply -f /tmp/argocd-app-bootstrap/absencesbo-project.yml"
+  register: argocd_project_apply
+  changed_when: >-
+    'created' in argocd_project_apply.stdout
+    or 'configured' in argocd_project_apply.stdout
+  when: argocd_apply_app_manifests | bool
+
+- name: Apply ArgoCD application namespace manifest
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl apply -f /tmp/argocd-app-bootstrap/absencesbo-dev-namespace.yml"
+  register: argocd_app_namespace_apply
+  changed_when: >-
+    'created' in argocd_app_namespace_apply.stdout
+    or 'configured' in argocd_app_namespace_apply.stdout
+  when: argocd_apply_app_manifests | bool
+
+- name: Apply ArgoCD application manifest
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl apply -f /tmp/argocd-app-bootstrap/absencesbo-dev-application.yml"
+  register: argocd_application_apply
+  changed_when: >-
+    'created' in argocd_application_apply.stdout
+    or 'configured' in argocd_application_apply.stdout
+  when: argocd_apply_app_manifests | bool
+
+- name: Show ArgoCD application status
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get application absencesbo-dev -n {{ argocd_namespace }}"
+  register: argocd_application_status
+  changed_when: false
+  when: argocd_apply_app_manifests | bool
+
+- name: Show ArgoCD resources
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get all -n {{ argocd_namespace }}"
+  register: argocd_resources
+  changed_when: false
+
+- name: Show ArgoCD bootstrap summary
+  ansible.builtin.debug:
+    msg:
+      - "ArgoCD namespace: {{ argocd_namespace }}"
+      - "ArgoCD install method: {{ argocd_install_method }}"
+      - "ArgoCD manifest URL: {{ argocd_manifest_url }}"
+      - "ArgoCD resources:"
+      - "{{ argocd_resources.stdout }}"

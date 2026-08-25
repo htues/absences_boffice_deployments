@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: absencesbo-dev
+  labels:
+    app.kubernetes.io/name: absencesbo
+    app.kubernetes.io/environment: dev
+    app.kubernetes.io/managed-by: argocd
