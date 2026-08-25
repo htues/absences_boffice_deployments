@@ -2,6 +2,9 @@ global:
   environment: dev
 
 backend:
+  image:
+    repository: hftamayo/absencesbobe
+    tag: "bedev"
   # Non-sensitive runtime setup overrides
   executionMode: "development"
   frontendOrigins:
@@ -9,7 +12,16 @@ backend:
     - http://localhost:8041
     - https://dev.tamayo.dev/absencesbo
 
+frontend:
+  image:
+    repository: hftamayo/absencesbofe
+    tag: "fedev"
+
 nginx:
+  image:
+    repository: hftamayo/nginxk8s
+    tag: "toolsdev"
+
   upstreams:
     frontendPort: 80
     backendPort: 8080
