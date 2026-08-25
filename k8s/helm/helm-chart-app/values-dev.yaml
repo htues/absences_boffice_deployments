@@ -17,10 +17,15 @@ frontend:
     repository: hftamayo/absencesbofe
     tag: "fedev"
 
+database:
+  image:
+    repository: hftamayo/pgdevelopment
+    tag: "dbdev"
+
 nginx:
   image:
     repository: hftamayo/nginxk8s
-    tag: "toolsdev"
+    tag: "nginxdev"
 
   upstreams:
     frontendPort: 80
