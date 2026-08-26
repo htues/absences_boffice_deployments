@@ -1,7 +1,7 @@
 ---
 - name: Verify k3s node is reachable
   become: true
-  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+  ansible.builtin.command: "{{ k3s_path }} kubectl get nodes"
   register: k3s_get_nodes
   retries: 60
   delay: 5
@@ -10,13 +10,13 @@
 
 - name: Show k3s nodes in wide format
   become: true
-  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes -o wide
+  ansible.builtin.command: "{{ k3s_path }} kubectl get nodes -o wide"
   register: k3s_nodes_wide
   changed_when: false
 
 - name: Capture raw node status
   become: true
-  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes --no-headers
+  ansible.builtin.command: "{{ k3s_path }} kubectl get nodes --no-headers"
   register: k3s_nodes_raw
   changed_when: false
 
@@ -32,7 +32,7 @@
 
 - name: Verify kubectl symlink is available
   become: true
-  ansible.builtin.command: /usr/local/bin/kubectl version --client=true
+  ansible.builtin.command: "{{ k3s_path }} version --client=true"
   register: kubectl_version
   changed_when: false
 
