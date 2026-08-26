@@ -30,10 +30,16 @@
       {{ k3s_nodes_raw.stdout }}
     success_msg: "The node is Ready."
 
+- name: Verify k3s binary is available
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} --version"
+  register: k3s_version_check
+  changed_when: false
+
 - name: Verify kubectl symlink is available
   become: true
-  ansible.builtin.command: "{{ k3s_path }} version --client=true"
-  register: kubectl_version
+  ansible.builtin.command: "{{ kubectl_path }} version --client=true"
+  register: kubectl_client_version
   changed_when: false
 
 - name: Verify Helm is available
