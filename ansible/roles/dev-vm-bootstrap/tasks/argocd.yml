@@ -48,7 +48,6 @@
   register: argocd_deployments_ready
   changed_when: false
 
----
 - name: Assert ArgoCD install method is supported
   ansible.builtin.assert:
     that:
