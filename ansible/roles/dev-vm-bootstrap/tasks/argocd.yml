@@ -73,7 +73,7 @@
 - name: Copy ArgoCD project manifest to VM
   become: true
   ansible.builtin.copy:
-    src: "{{ argocd_project_manifest_path }}"
+    src: "{{ playbook_dir }}/../../{{ argocd_project_manifest_path }}"
     dest: /tmp/argocd-app-bootstrap/absencesbo-project.yml
     mode: "0644"
   when: argocd_apply_app_manifests | bool
@@ -81,7 +81,7 @@
 - name: Copy ArgoCD application namespace manifest to VM
   become: true
   ansible.builtin.copy:
-    src: "{{ argocd_namespace_manifest_path }}"
+    src: "{{ playbook_dir }}/../../{{ argocd_namespace_manifest_path }}"
     dest: /tmp/argocd-app-bootstrap/absencesbo-dev-namespace.yml
     mode: "0644"
   when: argocd_apply_app_manifests | bool
@@ -89,7 +89,7 @@
 - name: Copy ArgoCD application manifest to VM
   become: true
   ansible.builtin.copy:
-    src: "{{ argocd_app_manifest_path }}"
+    src: "{{ playbook_dir }}/../../{{ argocd_app_manifest_path }}"
     dest: /tmp/argocd-app-bootstrap/absencesbo-dev-application.yml
     mode: "0644"
   when: argocd_apply_app_manifests | bool
