@@ -6,6 +6,7 @@
     dest: /usr/local/bin/kubectl
     state: link
     force: true
+    follow: false
 
 - name: Check kubectl is available from k3s
   become: true
