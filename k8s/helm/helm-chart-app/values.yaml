@@ -196,6 +196,10 @@ security:
   runAsNonRoot: true
   runAsUser: 1000
 
+externalSecrets:
+  aws:
+    region: us-east-2
+
 monitoring:
   prometheus:
     # Turn off by default until you actually expose metrics endpoints.

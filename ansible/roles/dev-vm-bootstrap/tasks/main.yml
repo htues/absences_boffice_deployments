@@ -8,6 +8,9 @@
 - name: Install and configure tools
   ansible.builtin.import_tasks: tools.yml
 
+- name: Install and configure external-secrets
+  ansible.builtin.import_tasks: external-secrets.yml
+
 - name: Install and configure ArgoCD
   ansible.builtin.import_tasks: argocd.yml
   when: argocd_install_enabled | bool

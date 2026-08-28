@@ -48,6 +48,37 @@
   register: helm_version
   changed_when: false
 
+- name: Verify External Secrets namespace exists
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get namespace external-secrets"
+  register: external_secrets_namespace_verify
+  changed_when: false
+
+- name: Verify External Secrets pods are running
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get pods -n external-secrets --no-headers"
+  register: external_secrets_pods_verify
+  changed_when: false
+
+- name: Assert External Secrets pods are running
+  ansible.builtin.assert:
+    that:
+      - external_secrets_pods_verify.stdout is search('Running')
+      - external_secrets_pods_verify.stdout is not search('CrashLoopBackOff')
+      - external_secrets_pods_verify.stdout is not search('Error')
+      - external_secrets_pods_verify.stdout is not search('ImagePullBackOff')
+    fail_msg: >-
+      External Secrets Operator pods are not healthy.
+      kubectl output:
+      {{ external_secrets_pods_verify.stdout }}
+    success_msg: "External Secrets Operator pods are running."
+
+- name: Verify External Secrets CRDs exist
+  become: true
+  ansible.builtin.command: "{{ k3s_path }} kubectl get crd externalsecrets.external-secrets.io secretstores.external-secrets.io clustersecretstores.external-secrets.io"
+  register: external_secrets_crds_verify
+  changed_when: false
+
 - name: Verify ArgoCD namespace exists
   become: true
   ansible.builtin.command: "{{ k3s_path }} kubectl get namespace {{ argocd_namespace }}"
@@ -98,8 +129,12 @@
       - "k3s kubectl get nodes -o wide:"
       - "{{ k3s_nodes_wide.stdout }}"
       - "app_nodeport contract: {{ app_nodeport }}"
-      - "kubectl version: {{ kubectl_version.stdout | default('unknown') }}"
+      - "kubectl version: {{ kubectl_client_version.stdout | default('unknown') }}"
       - "helm version: {{ helm_version.stdout | default('unknown') }}"
+      - "External Secrets Operator pods:"
+      - "{{ external_secrets_pods_verify.stdout | default('External Secrets Operator verification skipped') }}"
+      - "External Secrets CRDs:"
+      - "{{ external_secrets_crds_verify.stdout | default('External Secrets CRDs verification skipped') }}"
       - "ArgoCD enabled: {{ argocd_install_enabled }}"
       - "ArgoCD namespace: {{ argocd_namespace if argocd_install_enabled else 'disabled' }}"
       - "ArgoCD pods:"
