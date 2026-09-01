@@ -17,6 +17,26 @@ resource "aws_iam_role" "ec2_ssm" {
   tags = local.common_tags
 }
 
+resource "aws_iam_role_policy" "secrets_manager_read" {
+  name = "${local.role_name}-secrets-manager-read"
+  role = aws_iam_role.ec2_ssm.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadAbsencesboSecrets"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:absencesbocred*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
