@@ -5,6 +5,7 @@ helm_required: true
 app_nodeport: 32322
 bootstrap_user: "ubuntu"
 kubectl_path: "/usr/local/bin/kubectl"
+kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
 k3s_path: "/usr/local/bin/k3s"
 
 # ArgoCD bootstrap

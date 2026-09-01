@@ -50,6 +50,7 @@ env:
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
 
   K3S_VERSION: "v1.30.2+k3s1"
+  KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
   NODE_NAME: ${{ vars.APP_NAME || 'absencesbo' }}-${{ inputs.environment }}-node
   APP_NODEPORT: "32322"
   NLB_BACKEND_CIDR: "0.0.0.0/0"
@@ -352,6 +353,7 @@ jobs:
             -e "k3s_version=${K3S_VERSION}" \
             -e "node_name=${NODE_NAME}" \
             -e "app_nodeport=${APP_NODEPORT}" \
+            -e "kubeconfig_path=${KUBECONFIG}" \          
             -e "helm_required=true" \
             -e "ansible_python_interpreter=/usr/bin/python3" \
             --skip-tags never
