@@ -294,7 +294,7 @@ jobs:
 
           cat > "${INVENTORY_PATH}" <<EOF
           [dev_vm]
-          dev-node ansible_host=${INSTANCE_ID} ansible_connection=community.aws.aws_ssm ansible_aws_ssm_bucket_name=${BUCKET_NAME} ansible_aws_ssm_region=${AWS_REGION}
+          dev-node ansible_host=${INSTANCE_ID} ansible_connection=community.aws.aws_ssm ansible_aws_ssm_bucket_name=${BUCKET_NAME} ansible_aws_ssm_region=${AWS_REGION} ansible_aws_ssm_timeout=120
           EOF
 
           echo "Generated inventory:"
