@@ -84,8 +84,20 @@
   become: true
   ansible.builtin.raw: |
     export DEBIAN_FRONTEND=noninteractive
-    apt-get install -y socat conntrack jq iptables aws-cli
+    apt-get install -y socat conntrack jq iptables
   changed_when: false
+
+- name: Install AWS CLI v2
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tmpdir="$(mktemp -d)"
+    cd "$tmpdir"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip -q awscliv2.zip
+    ./aws/install --update
+    rm -rf "$tmpdir"
+  args:
+    executable: /bin/bash
 
 - name: Ensure ubuntu home directory exists
   become: true
