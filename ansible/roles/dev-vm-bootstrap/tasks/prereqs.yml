@@ -84,7 +84,7 @@
   become: true
   ansible.builtin.raw: |
     export DEBIAN_FRONTEND=noninteractive
-    apt-get install -y socat conntrack jq iptables
+    apt-get install -y socat conntrack jq iptables unzip
   changed_when: false
 
 - name: Install AWS CLI v2
