@@ -30,72 +30,113 @@ data:
 
         sendfile on;
         keepalive_timeout 65;
+
         map $http_origin $cors_origin {
             default "";
             "http://localhost" "http://localhost";
             "http://localhost:8041" "http://localhost:8041";
-            "https://dev.tamayo.dev/absencesbo" "https://dev.tamayo.dev/absencesbo";
-            "https://stg.tamayo.dev/absencesbo" "https://stg.tamayo.dev/absencesbo";
-            "https://apps.tamayo.dev/absencesbo" "https://apps.tamayo.dev/absencesbo";
+            "https://dev.tamayo.dev" "https://dev.tamayo.dev";
+            "https://stg.tamayo.dev" "https://stg.tamayo.dev";
+            "https://apps.tamayo.dev" "https://apps.tamayo.dev";
         }
-        
-          server {
-              listen 80;
-              server_name _;
 
-              location /api/ {
-                      proxy_pass http://{{ .Release.Name }}-backend:{{ .Values.nginx.upstreams.backendPort }};
-                      proxy_http_version 1.1;
-                      proxy_set_header Host $host;
-                      proxy_set_header X-Real-IP $remote_addr;
-                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto $scheme;
-                      
-                      add_header Access-Control-Allow-Origin "$cors_origin" always;
-                      add_header Vary "Origin" always;                      
-              }
+        server {
+            listen 80;
+            server_name _;
 
-              location = /index.html {
-                      proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }};
-                      proxy_http_version 1.1;
-                      proxy_set_header Host $host;
-                      proxy_set_header X-Real-IP $remote_addr;
-                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto https;
+            location = /healthz {
+                access_log off;
+                default_type text/plain;
+                return 200 "ok\n";
+            }
 
-                      add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-              }
+            # Temporary landing route.
+            # Later this can proxy to another landing frontend project/service.
+            location = / {
+                default_type text/plain;
+                return 200 "Landing page not deployed yet\n";
+            }
 
-              location /assets/ {
-                      proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }};
-                      proxy_http_version 1.1;
-                      proxy_set_header Host $host;
-                      proxy_set_header X-Real-IP $remote_addr;
-                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto https;
+            # Normalize path.
+            location = /absencesbo {
+                return 301 /absencesbo/;
+            }
 
-                      add_header Cache-Control "public, max-age=31536000, immutable" always;
-              }
+            # Backend API for the absences app.
+            # Public:
+            #   /absencesbo/api/...
+            # Internal backend receives:
+            #   /api/...
+            location /absencesbo/api/ {
+                proxy_pass http://{{ .Release.Name }}-backend:{{ .Values.nginx.upstreams.backendPort }}/api/;
 
-              location / {
-                      proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }};
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-Prefix /absencesbo;
 
-                      proxy_http_version 1.1;
-                      proxy_set_header Upgrade $http_upgrade;
-                      proxy_set_header Connection 'upgrade';
-                      proxy_set_header Host $host;
-                      proxy_set_header X-Real-IP $remote_addr;
-                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto https;
+                add_header Access-Control-Allow-Origin "$cors_origin" always;
+                add_header Vary "Origin" always;
+                add_header Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE" always;
+                add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization" always;
 
-                      add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-              }
+                if ($request_method = OPTIONS) {
+                    add_header Access-Control-Allow-Origin "$cors_origin" always;
+                    add_header Vary "Origin" always;
+                    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE" always;
+                    add_header Access-Control-Allow-Headers "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization" always;
+                    add_header Content-Length 0;
+                    add_header Content-Type "text/plain; charset=utf-8";
+                    return 204;
+                }
+            }
 
-              location = /healthz {
-                      access_log off;
-                      default_type text/plain;
-                      return 200 "ok\n";
-              }
+            # Vite/React built assets.
+            # Public:
+            #   /absencesbo/assets/...
+            # Internal frontend receives:
+            #   /assets/...
+            location /absencesbo/assets/ {
+                proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }}/assets/;
+
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-Prefix /absencesbo;
+
+                add_header Cache-Control "public, max-age=31536000, immutable" always;
+            }
+
+            # Absences frontend SPA.
+            # Public:
+            #   /absencesbo/
+            #   /absencesbo/some/client/route
+            # Internal frontend receives:
+            #   /
+            #   /some/client/route
+            location /absencesbo/ {
+                proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }}/;
+
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-Prefix /absencesbo;
+
+                add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+            }
+
+            # Anything else at root should not accidentally go to absences app.
+            location / {
+                return 404;
+            }
         }
     }
 {{- end }}
