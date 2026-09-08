@@ -45,12 +45,11 @@ spec:
               name: db
               protocol: TCP
           envFrom:
-            # Non-sensitive DB props (POSTGRES_USER/POSTGRES_DB/POSTGRES_HOST/POSTGRES_PORT) come from ConfigMap now
-            - configMapRef:
-                name: "{{ .Release.Name }}-env"
-            # Sensitive DB password comes from Secret (ideally synced from AWS Secrets Manager)
+            # Database env vars come from either:
+            # - database.auth.existingSecret, usually synced from AWS Secrets Manager by External Secrets
+            # - fallback local Secret named <release-name>-database
             - secretRef:
-                name: "{{ default (printf "%s-database" .Release.Name) .Values.database.auth.existingSecret }}"
+                name: {{ .Values.database.auth.existingSecret | default (printf "%s-database" .Release.Name) | quote }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -151,12 +150,12 @@ spec:
             failureThreshold: {{ .Values.healthChecks.backend.liveness.failureThreshold | int }}
           {{- end }}
           envFrom:
-            # Non-sensitive runtime config (EXECUTION_MODE, SEED_ENABLED, etc.)
+            # Non-sensitive runtime config: APP_ENV, EXECUTION_MODE, SEED_ENABLED, etc.
             - configMapRef:
                 name: "{{ .Release.Name }}-env"
-            # Sensitive DB props (POSTGRES_*) from existingSecret (ideally created via External Secrets from AWS Secrets Manager)
+            # Database connection env vars: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PORT.
             - secretRef:
-                name: "{{ default (printf "%s-database" .Release.Name) .Values.database.auth.existingSecret }}"
+                name: {{ .Values.database.auth.existingSecret | default (printf "%s-database" .Release.Name) | quote }}
       {{- if .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{ toYaml .Values.global.imagePullSecrets | nindent 8 }}
@@ -212,6 +211,8 @@ spec:
               value: "{{ .Values.frontend.port }}"
             - name: HOST
               value: "{{ .Values.frontend.host }}"
+            - name: APP_ENV
+              value: "{{ .Values.global.environment }}"
           resources:
             requests:
               cpu: "{{ .Values.resources.requests.cpu }}"
@@ -244,9 +245,6 @@ spec:
             timeoutSeconds: {{ .Values.healthChecks.frontend.liveness.timeoutSeconds | int }}
             failureThreshold: {{ .Values.healthChecks.frontend.liveness.failureThreshold | int }}
           {{- end }}
-          env:
-            - name: APP_ENV
-              value: "{{ .Values.global.environment }}"
       {{- if .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{ toYaml .Values.global.imagePullSecrets | nindent 8 }}
@@ -255,98 +253,5 @@ spec:
       securityContext:
         runAsNonRoot: {{ .Values.security.runAsNonRoot }}
         runAsUser: {{ .Values.security.runAsUser }}
-      {{- end }}
-{{- end }}
-
----
-{{- if .Values.nginx.enabled }}
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: "{{ .Release.Name }}-nginx"
-  labels:
-    app.kubernetes.io/name: "{{ .Chart.Name }}"
-    app.kubernetes.io/instance: "{{ .Release.Name }}"
-    app.kubernetes.io/component: nginx
-    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
-    environment: "{{ .Values.global.environment }}"
-spec:
-  replicas: {{ .Values.nginx.deployment.replicas | int }}
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: "{{ .Chart.Name }}"
-      app.kubernetes.io/instance: "{{ .Release.Name }}"
-      app.kubernetes.io/component: nginx
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: "{{ .Chart.Name }}"
-        app.kubernetes.io/instance: "{{ .Release.Name }}"
-        app.kubernetes.io/component: nginx
-      {{- if and .Values.monitoring.prometheus.scrape .Values.nginx.metrics.enabled }}
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "{{ default (toString .Values.nginx.service.targetPort) (toString .Values.nginx.metrics.port) }}"
-        prometheus.io/path: "{{ .Values.nginx.metrics.path }}"
-      {{- end }}
-    spec:
-      containers:
-        - name: nginx
-          image: "{{ .Values.nginx.image.repository }}:{{ required "nginx.image.tag is required" .Values.nginx.image.tag }}"
-          imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
-          ports:
-            - containerPort: {{ .Values.nginx.service.targetPort | int }}
-              name: http
-          volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/nginx.conf
-              subPath: nginx.conf
-            - name: nginx-cache
-              mountPath: /var/cache/nginx
-            - name: nginx-run
-              mountPath: /var/run
-          resources:
-            requests:
-              cpu: "{{ .Values.resources.requests.cpu }}"
-              memory: "{{ .Values.resources.requests.memory }}"
-            limits:
-              cpu: "{{ .Values.resources.limits.cpu }}"
-              memory: "{{ .Values.resources.limits.memory }}"
-          {{- if .Values.healthChecks.enabled }}
-          startupProbe:
-            httpGet:
-              path: {{ .Values.healthChecks.nginx.startup.path | quote }}
-              port: {{ .Values.nginx.service.targetPort | int }}
-            periodSeconds: {{ .Values.healthChecks.nginx.startup.periodSeconds | int }}
-            timeoutSeconds: {{ .Values.healthChecks.nginx.startup.timeoutSeconds | int }}
-            failureThreshold: {{ .Values.healthChecks.nginx.startup.failureThreshold | int }}
-          readinessProbe:
-            httpGet:
-              path: {{ .Values.healthChecks.nginx.readiness.path | quote }}
-              port: {{ .Values.nginx.service.targetPort | int }}
-            initialDelaySeconds: {{ .Values.healthChecks.nginx.readiness.initialDelaySeconds | int }}
-            periodSeconds: {{ .Values.healthChecks.nginx.readiness.periodSeconds | int }}
-            timeoutSeconds: {{ .Values.healthChecks.nginx.readiness.timeoutSeconds | int }}
-            failureThreshold: {{ .Values.healthChecks.nginx.readiness.failureThreshold | int }}
-          livenessProbe:
-            httpGet:
-              path: {{ .Values.healthChecks.nginx.liveness.path | quote }}
-              port: {{ .Values.nginx.service.targetPort | int }}
-            initialDelaySeconds: {{ .Values.healthChecks.nginx.liveness.initialDelaySeconds | int }}
-            periodSeconds: {{ .Values.healthChecks.nginx.liveness.periodSeconds | int }}
-            timeoutSeconds: {{ .Values.healthChecks.nginx.liveness.timeoutSeconds | int }}
-            failureThreshold: {{ .Values.healthChecks.nginx.liveness.failureThreshold | int }}
-          {{- end }}
-      volumes:
-        - name: nginx-config
-          configMap:
-            name: "{{ .Release.Name }}-nginx-config"
-        - name: nginx-cache
-          emptyDir: {}
-        - name: nginx-run
-          emptyDir: {}
-      {{- if .Values.global.imagePullSecrets }}
-      imagePullSecrets:
-        {{ toYaml .Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
 {{- end }}
