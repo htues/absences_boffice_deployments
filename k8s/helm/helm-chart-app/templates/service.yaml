@@ -17,7 +17,7 @@ spec:
     - name: db
       protocol: TCP
       port: {{ .Values.database.service.port | int }}
-      targetPort: {{ .Values.database.service.targetPort | int }}
+      targetPort: {{ .Values.database.service.targetPort | default .Values.database.service.port | int }}
   type: "{{ .Values.database.service.type }}"
 {{- end }}
 
@@ -41,7 +41,7 @@ spec:
     - name: http
       protocol: TCP
       port: {{ .Values.backend.service.port | int }}
-      targetPort: {{ .Values.backend.service.targetPort | int }}
+      targetPort: {{ .Values.backend.service.targetPort | default .Values.backend.service.port | int }}
   type: "{{ .Values.backend.service.type }}"
 {{- end }}
 
@@ -65,7 +65,7 @@ spec:
     - name: http
       protocol: TCP
       port: {{ .Values.frontend.service.port | int }}
-      targetPort: {{ .Values.frontend.service.targetPort | int }}
+      targetPort: {{ .Values.frontend.service.targetPort | default .Values.frontend.service.port | int }}
   type: "{{ .Values.frontend.service.type }}"
 {{- end }}
 
@@ -93,7 +93,7 @@ spec:
     - name: http
       protocol: TCP
       port: {{ .Values.nginx.service.port | int }}
-      targetPort: {{ .Values.nginx.service.targetPort | int }}
+      targetPort: {{ .Values.nginx.service.targetPort | default .Values.nginx.service.port | int }}
       {{- if eq .Values.nginx.service.type "NodePort" }}
       nodePort: {{ required "nginx.service.nodePort must be set when nginx.service.type=NodePort" .Values.nginx.service.nodePort | int }}
       {{- end }}
