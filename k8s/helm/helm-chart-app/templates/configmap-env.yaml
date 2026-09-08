@@ -14,7 +14,3 @@ data:
   SEED_ENABLED: {{ .Values.backend.seedEnabled | default false | toString | quote }}
   PAGINATION_METHOD: {{ .Values.backend.paginationMethod | default "offset" | quote }}
   FRONTEND_ORIGINS: {{ .Values.backend.frontendOrigins | default "" | quote }}
-  POSTGRES_HOST: {{ printf "%s-database" .Release.Name | quote }}
-  POSTGRES_PORT: {{ .Values.database.service.port | default 5432 | toString | quote }}
-  POSTGRES_DB: {{ .Values.database.auth.database | default "absencesbo" | quote }}
-  POSTGRES_USER: {{ .Values.database.auth.username | default "app" | quote }}
