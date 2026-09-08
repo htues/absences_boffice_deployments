@@ -3,66 +3,19 @@ name: AWS_DEV_BOOTSTRAP
 on:
   workflow_dispatch:
     inputs:
-      confirmation:
-        description: "Type 'bootstrap' to confirm fresh dev deployment"
-        required: true
-        type: string
-
       environment:
         description: "Environment to bootstrap"
         required: true
-        default: "experimental"
+        default: "dev"
         type: choice
         options:
-          - experimental
+          - dev
 
-      deploy_database:
-        description: "Deploy database component after IaC bootstrap"
+      print_oidc_tokens:
+        description: "Print OIDC token diagnostics in IaC workflows"
         required: false
         type: boolean
         default: true
-
-      deploy_backend:
-        description: "Deploy backend component after IaC bootstrap"
-        required: false
-        type: boolean
-        default: true
-
-      deploy_frontend:
-        description: "Deploy frontend component after IaC bootstrap"
-        required: false
-        type: boolean
-        default: true
-
-      deploy_nginx:
-        description: "Deploy nginx component after IaC bootstrap"
-        required: false
-        type: boolean
-        default: true
-
-      database_tag:
-        description: "Database image tag"
-        required: false
-        type: string
-        default: "0.0.1"
-
-      backend_tag:
-        description: "Backend image tag"
-        required: false
-        type: string
-        default: "0.0.1"
-
-      frontend_tag:
-        description: "Frontend image tag"
-        required: false
-        type: string
-        default: "0.0.1"
-
-      nginx_tag:
-        description: "Nginx image tag"
-        required: false
-        type: string
-        default: "0.0.1"
 
 permissions:
   contents: read
@@ -73,56 +26,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  guardrail:
-    name: Validate bootstrap confirmation
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Guardrail - confirmation
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ inputs.confirmation }}" != "bootstrap" ]]; then
-            echo "Confirmation failed. You must type 'bootstrap'."
-            exit 1
-          fi
-
-          echo "Bootstrap confirmation accepted."
-
-  deploy-iac:
-    name: Deploy dev infrastructure
-    needs:
-      - guardrail
+  deploy-dev-iac:
+    name: Deploy dev IaC
     uses: ./.github/workflows/aws_dev_deploy_iac.yml
     with:
       confirmation: deploy
       environment: ${{ inputs.environment }}
-      debug_oidc: false
+      debug_oidc: ${{ inputs.print_oidc_tokens }}
+    secrets: inherit
+
+  deploy-edge-iac:
+    name: Deploy edge IaC
+    needs:
+      - deploy-dev-iac
+    uses: ./.github/workflows/aws_deploy_edge_iac.yml
+    with:
+      confirmation: deploy
+      environment: ${{ inputs.environment }}
+      debug_oidc: ${{ inputs.print_oidc_tokens }}
     secrets: inherit
 
   deploy-codebase:
     name: Deploy dev codebase
     needs:
-      - deploy-iac
-    uses: ./.github/workflows/aws_dev_deploy_codebase.yaml
+      - deploy-edge-iac
+    uses: ./.github/workflows/aws_dev_deploy_codebase.yml
     with:
       confirmation: deploy
       environment: ${{ inputs.environment }}
-      deploy_database: ${{ inputs.deploy_database }}
-      deploy_backend: ${{ inputs.deploy_backend }}
-      deploy_frontend: ${{ inputs.deploy_frontend }}
-      deploy_nginx: ${{ inputs.deploy_nginx }}
-      database_tag: ${{ inputs.database_tag }}
-      backend_tag: ${{ inputs.backend_tag }}
-      frontend_tag: ${{ inputs.frontend_tag }}
-      nginx_tag: ${{ inputs.nginx_tag }}
     secrets: inherit
 
   bootstrap-summary:
     name: Bootstrap summary
     needs:
-      - deploy-iac
+      - deploy-dev-iac
+      - deploy-edge-iac
       - deploy-codebase
     if: always()
     runs-on: ubuntu-latest
@@ -137,29 +75,36 @@ jobs:
             echo "| Item | Value |"
             echo "| ---- | ----- |"
             echo "| Environment | ${{ inputs.environment }} |"
-            echo "| IaC Deploy Result | ${{ needs.deploy-iac.result }} |"
-            echo "| Codebase Deploy Result | ${{ needs.deploy-codebase.result }} |"
-            echo "| deploy_database | ${{ inputs.deploy_database }} |"
-            echo "| deploy_backend | ${{ inputs.deploy_backend }} |"
-            echo "| deploy_frontend | ${{ inputs.deploy_frontend }} |"
-            echo "| deploy_nginx | ${{ inputs.deploy_nginx }} |"
-            echo "| database_tag | ${{ inputs.database_tag }} |"
-            echo "| backend_tag | ${{ inputs.backend_tag }} |"
-            echo "| frontend_tag | ${{ inputs.frontend_tag }} |"
-            echo "| nginx_tag | ${{ inputs.nginx_tag }} |"
+            echo "| Print OIDC Tokens | ${{ inputs.print_oidc_tokens }} |"
+            echo "| Dev IaC Result | ${{ needs.deploy-dev-iac.result }} |"
+            echo "| Edge IaC Result | ${{ needs.deploy-edge-iac.result }} |"
+            echo "| Codebase Result | ${{ needs.deploy-codebase.result }} |"
+            echo ""
+            echo "### Execution Order"
+            echo ""
+            echo "1. aws_dev_deploy_iac"
+            echo "2. aws_deploy_edge_iac"
+            echo "3. aws_dev_deploy_codebase"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Fail bootstrap if deploy jobs did not succeed
+      - name: Fail bootstrap if any delegated workflow failed
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${{ needs.deploy-iac.result }}" != "success" ]]; then
-            echo "Deploy dev infrastructure did not succeed: ${{ needs.deploy-iac.result }}"
+          if [[ "${{ needs.deploy-dev-iac.result }}" != "success" ]]; then
+            echo "Dev IaC deployment did not succeed: ${{ needs.deploy-dev-iac.result }}"
+            exit 1
+          fi
+
+          if [[ "${{ needs.deploy-edge-iac.result }}" != "success" ]]; then
+            echo "Edge IaC deployment did not succeed: ${{ needs.deploy-edge-iac.result }}"
             exit 1
           fi
 
           if [[ "${{ needs.deploy-codebase.result }}" != "success" ]]; then
-            echo "Deploy dev codebase did not succeed: ${{ needs.deploy-codebase.result }}"
+            echo "Codebase deployment did not succeed: ${{ needs.deploy-codebase.result }}"
             exit 1
           fi
+
+          echo "AWS dev bootstrap completed successfully."
