@@ -4,7 +4,7 @@
 global:
   environment: base
   imagePullSecrets:
-  - name: regcred
+    - name: regcred
 
 database:
   enabled: true
@@ -24,17 +24,30 @@ database:
     size: 10Gi
     storageClassName: ""
   auth:
+    # Fallback/default values used only when database.auth.existingSecret is empty.
+    # In AWS mode, POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB/POSTGRES_HOST/POSTGRES_PORT
+    # are expected to come from the Kubernetes Secret synced by External Secrets.
     database: absencesbo
     username: sebastic
+    password: ""
 
-    # Preferred path:
-    # - Create this Secret via External Secrets (synced from AWS Secrets Manager)
-    # - Put POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB/POSTGRES_HOST/POSTGRES_PORT keys in it
+    # Preferred AWS Secrets Manager path:
+    # - External Secrets syncs the remote AWS secret into this Kubernetes Secret.
+    # - Backend/database containers should consume DB env vars from this Secret.
+    # - Expected keys:
+    #   POSTGRES_USER
+    #   POSTGRES_PASSWORD
+    #   POSTGRES_DB
+    #   POSTGRES_HOST
+    #   POSTGRES_PORT
     existingSecret: "absencesbocred"
 
-    # Fallback path (ONLY if existingSecret is empty):
-    # password MUST be explicitly set, Helm won't auto-generate it anymore
-    password: ""
+    externalSecret:
+      enabled: true
+      secretStoreName: aws-secrets-manager
+      secretStoreKind: SecretStore
+      refreshInterval: 1h
+      remoteSecretName: absencesbocred
 
   security:
     # IMPORTANT: official postgres images can be sensitive to forced runAsUser (permissions on /var/lib/postgresql/data).
@@ -65,7 +78,8 @@ backend:
     port: "" # if empty -> falls back to service.targetPort
     path: "/metrics"
 
-  # Non-sensitive runtime config (rendered into configmap-env.yaml)
+  # Non-sensitive runtime config rendered into configmap-env.yaml.
+  # Database connection values now come from database.auth.existingSecret.
   seedEnabled: true
   paginationMethod: "offset"
   frontendOrigins:
@@ -91,7 +105,7 @@ frontend:
     port: 80
     targetPort: 8041
   metrics:
-    enabled: false
+    enabled: false # frontend does not expose metrics yet
     port: "" # if empty -> falls back to service.targetPort
     path: "/metrics"
 
@@ -191,13 +205,14 @@ healthChecks:
       failureThreshold: 6
 
 security:
-  # Used for stateless workloads (nginx/backend) in current templates.
+  # Used for stateless workloads such as backend, frontend, and nginx.
   enabled: true
   runAsNonRoot: true
   runAsUser: 1000
 
 externalSecrets:
   aws:
+    # Used by SecretStore templates for AWS Secrets Manager integration.
     region: us-east-2
 
 monitoring:
