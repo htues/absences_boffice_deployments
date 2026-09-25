@@ -255,3 +255,109 @@ spec:
         runAsUser: {{ .Values.security.runAsUser }}
       {{- end }}
 {{- end }}
+
+---
+{{- if .Values.nginx.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-nginx"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+    app.kubernetes.io/component: nginx
+    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+    environment: "{{ .Values.global.environment }}"
+spec:
+  replicas: {{ .Values.nginx.deployment.replicas | int }}
+  strategy:
+    type: {{ .Values.nginx.deployment.strategy.type }}
+    {{- if .Values.nginx.deployment.strategy.rollingUpdate }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.nginx.deployment.strategy.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.nginx.deployment.strategy.rollingUpdate.maxSurge }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+      app.kubernetes.io/component: nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+        app.kubernetes.io/component: nginx
+      {{- if and .Values.monitoring.prometheus.scrape .Values.nginx.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ default (toString .Values.nginx.service.targetPort) (toString .Values.nginx.metrics.port) }}"
+        prometheus.io/path: "{{ .Values.nginx.metrics.path }}"
+      {{- end }}
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.nginx.image.repository }}:{{ required "nginx.image.tag is required" .Values.nginx.image.tag }}"
+          imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.nginx.service.targetPort | int }}
+              name: http
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "{{ .Values.resources.requests.cpu }}"
+              memory: "{{ .Values.resources.requests.memory }}"
+            limits:
+              cpu: "{{ .Values.resources.limits.cpu }}"
+              memory: "{{ .Values.resources.limits.memory }}"
+          {{- if .Values.healthChecks.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.nginx.startup.path | quote }}
+              port: {{ .Values.nginx.service.targetPort | int }}
+            periodSeconds: {{ .Values.healthChecks.nginx.startup.periodSeconds | int }}
+            timeoutSeconds: {{ .Values.healthChecks.nginx.startup.timeoutSeconds | int }}
+            failureThreshold: {{ .Values.healthChecks.nginx.startup.failureThreshold | int }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.nginx.readiness.path | quote }}
+              port: {{ .Values.nginx.service.targetPort | int }}
+            initialDelaySeconds: {{ .Values.healthChecks.nginx.readiness.initialDelaySeconds | int }}
+            periodSeconds: {{ .Values.healthChecks.nginx.readiness.periodSeconds | int }}
+            timeoutSeconds: {{ .Values.healthChecks.nginx.readiness.timeoutSeconds | int }}
+            failureThreshold: {{ .Values.healthChecks.nginx.readiness.failureThreshold | int }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.nginx.liveness.path | quote }}
+              port: {{ .Values.nginx.service.targetPort | int }}
+            initialDelaySeconds: {{ .Values.healthChecks.nginx.liveness.initialDelaySeconds | int }}
+            periodSeconds: {{ .Values.healthChecks.nginx.liveness.periodSeconds | int }}
+            timeoutSeconds: {{ .Values.healthChecks.nginx.liveness.timeoutSeconds | int }}
+            failureThreshold: {{ .Values.healthChecks.nginx.liveness.failureThreshold | int }}
+          {{- end }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{ toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.security.enabled }}
+      securityContext:
+        runAsNonRoot: {{ .Values.security.runAsNonRoot }}
+        runAsUser: {{ .Values.security.runAsUser }}
+      {{- end }}
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: "{{ .Release.Name }}-nginx-config"
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+{{- end }}
