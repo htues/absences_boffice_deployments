@@ -57,11 +57,6 @@ data:
                 return 200 "Landing page not deployed yet\n";
             }
 
-            # Normalize path.
-            location = /absencesbo {
-                return 301 /absencesbo/;
-            }
-
             # Backend API for the absences app.
             # Public:
             #   /absencesbo/api/...
@@ -111,15 +106,20 @@ data:
                 add_header Cache-Control "public, max-age=31536000, immutable" always;
             }
 
+            # Normalize path.
+            location = /absencesbo {
+                return 301 /absencesbo/;
+            }
+
             # Absences frontend SPA.
             # Public:
+            #   /absencesbo
+            #   /absencesbo/some/client/route
+            # Internal frontend receives the same URI because proxy_pass has no trailing slash:
             #   /absencesbo/
             #   /absencesbo/some/client/route
-            # Internal frontend receives:
-            #   /
-            #   /some/client/route
             location /absencesbo/ {
-                proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }}/;
+                proxy_pass http://{{ .Release.Name }}-frontend:{{ .Values.nginx.upstreams.frontendPort }};
 
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
