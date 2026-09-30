@@ -110,7 +110,7 @@ frontend:
     path: "/metrics"
 
 nginx:
-  enabled: true
+  enabled: false
   image:
     repository: hftamayo/nginxk8s
     pullPolicy: IfNotPresent
