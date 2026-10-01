@@ -17,12 +17,18 @@ on:
 
   workflow_call:
     inputs:
-      confirmation:
-        required: true
+      backend_image_tag:
+        required: false
         type: string
-      environment:
-        required: true
+        default: ""
+      frontend_image_tag:
+        required: false
         type: string
+        default: ""
+      database_image_tag:
+        required: false
+        type: string
+        default: ""
 
   push:
     branches:
@@ -33,7 +39,7 @@ on:
       - ".github/workflows/aws_dev_deploy_codebase.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   APP_NAME: ${{ vars.APP_NAME || 'absencesbo' }}
@@ -41,6 +47,9 @@ env:
   HELM_CHART_DIR: k8s/helm/helm-chart-app
   ARGOCD_ENV_DIR: k8s/argocd/envs/dev
   ARGOCD_PROJECT_DIR: k8s/argocd/projects
+  BACKEND_IMAGE_TAG: ${{ inputs.backend_image_tag || '' }}
+  FRONTEND_IMAGE_TAG: ${{ inputs.frontend_image_tag || '' }}
+  DATABASE_IMAGE_TAG: ${{ inputs.database_image_tag || '' }}
 
 concurrency:
   group: AWS_DEV_DEPLOY_CODEBASE-${{ inputs.environment || 'dev' }}
@@ -82,6 +91,55 @@ jobs:
           test -f "${ARGOCD_PROJECT_DIR}/absencesbo-project.yml"
           test -f "${ARGOCD_ENV_DIR}/absencesbo-dev-namespace.yml"
           test -f "${ARGOCD_ENV_DIR}/absencesbo-dev-application.yml"
+
+      - name: Update deployment values
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
+          
+          if [[ -n "${BACKEND_IMAGE_TAG}" ]]; then
+            yq -i '.backend.image.tag = strenv(BACKEND_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+          
+          if [[ -n "${FRONTEND_IMAGE_TAG}" ]]; then
+            yq -i '.frontend.image.tag = strenv(FRONTEND_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+          
+          if [[ -n "${DATABASE_IMAGE_TAG}" ]]; then
+            yq -i '.database.image.tag = strenv(DATABASE_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+          
+          yq '.backend.image, .frontend.image, .database.image' "${VALUES_FILE}"          
+
+      - name: Commit deployment tag update
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
+          
+          if git diff --quiet -- "${VALUES_FILE}"; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add "${VALUES_FILE}"
+          git commit -m "deploy dev image tags"
+          git push
+
+      - name: Check image tag inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          if [[ -z "${BACKEND_IMAGE_TAG}" && -z "${FRONTEND_IMAGE_TAG}" && -z "${DATABASE_IMAGE_TAG}" ]]; then
+            echo "No image tags provided. Running validation only."
+          fi
 
       - name: Helm lint dev chart
         shell: bash
