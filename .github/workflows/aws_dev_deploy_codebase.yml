@@ -14,9 +14,30 @@ on:
         type: choice
         options:
           - dev
+      backend_image_tag:
+        description: "Backend image tag to deploy"
+        required: false
+        type: string
+        default: ""
+      frontend_image_tag:
+        description: "Frontend image tag to deploy"
+        required: false
+        type: string
+        default: ""
+      database_image_tag:
+        description: "Database image tag to deploy"
+        required: false
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
+      confirmation:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
       backend_image_tag:
         required: false
         type: string
@@ -75,6 +96,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
@@ -92,54 +115,35 @@ jobs:
           test -f "${ARGOCD_ENV_DIR}/absencesbo-dev-namespace.yml"
           test -f "${ARGOCD_ENV_DIR}/absencesbo-dev-application.yml"
 
-      - name: Update deployment values
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
-          
-          if [[ -n "${BACKEND_IMAGE_TAG}" ]]; then
-            yq -i '.backend.image.tag = strenv(BACKEND_IMAGE_TAG)' "${VALUES_FILE}"
-          fi
-          
-          if [[ -n "${FRONTEND_IMAGE_TAG}" ]]; then
-            yq -i '.frontend.image.tag = strenv(FRONTEND_IMAGE_TAG)' "${VALUES_FILE}"
-          fi
-          
-          if [[ -n "${DATABASE_IMAGE_TAG}" ]]; then
-            yq -i '.database.image.tag = strenv(DATABASE_IMAGE_TAG)' "${VALUES_FILE}"
-          fi
-          
-          yq '.backend.image, .frontend.image, .database.image' "${VALUES_FILE}"          
-
-      - name: Commit deployment tag update
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
-          
-          if git diff --quiet -- "${VALUES_FILE}"; then
-            echo "No image tag changes to commit."
-            exit 0
-          fi
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add "${VALUES_FILE}"
-          git commit -m "deploy dev image tags"
-          git push
-
       - name: Check image tag inputs
         shell: bash
         run: |
           set -euo pipefail
-          
+
           if [[ -z "${BACKEND_IMAGE_TAG}" && -z "${FRONTEND_IMAGE_TAG}" && -z "${DATABASE_IMAGE_TAG}" ]]; then
             echo "No image tags provided. Running validation only."
           fi
+
+      - name: Update deployment values
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
+
+          if [[ -n "${BACKEND_IMAGE_TAG}" ]]; then
+            yq -i '.backend.image.tag = strenv(BACKEND_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+
+          if [[ -n "${FRONTEND_IMAGE_TAG}" ]]; then
+            yq -i '.frontend.image.tag = strenv(FRONTEND_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+
+          if [[ -n "${DATABASE_IMAGE_TAG}" ]]; then
+            yq -i '.database.image.tag = strenv(DATABASE_IMAGE_TAG)' "${VALUES_FILE}"
+          fi
+
+          yq '.backend.image, .frontend.image, .database.image' "${VALUES_FILE}"
 
       - name: Helm lint dev chart
         shell: bash
@@ -181,6 +185,25 @@ jobs:
               print(f"Valid YAML: {file}")
           PY
 
+      - name: Commit deployment tag update
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VALUES_FILE="${HELM_CHART_DIR}/values-dev.yaml"
+
+          if git diff --quiet -- "${VALUES_FILE}"; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add "${VALUES_FILE}"
+          git commit -m "deploy dev image tags"
+          git push
+
       - name: GitOps deployment summary
         if: always()
         shell: bash
@@ -195,9 +218,12 @@ jobs:
             echo "| App | ${APP_NAME} |"
             echo "| Helm Chart | ${HELM_CHART_DIR} |"
             echo "| Values File | ${HELM_CHART_DIR}/values-dev.yaml |"
+            echo "| Backend Image Tag | ${BACKEND_IMAGE_TAG:-not provided} |"
+            echo "| Frontend Image Tag | ${FRONTEND_IMAGE_TAG:-not provided} |"
+            echo "| Database Image Tag | ${DATABASE_IMAGE_TAG:-not provided} |"
             echo "| ArgoCD Env Dir | ${ARGOCD_ENV_DIR} |"
             echo "| Deployment Owner | ArgoCD |"
             echo ""
             echo "### Result"
-            echo "This workflow validates GitOps files only. ArgoCD owns the actual Kubernetes deployment and reconciliation."
+            echo "This workflow validates GitOps files and, when image tags are provided, commits the updated dev image tags for ArgoCD reconciliation."
           } >> "$GITHUB_STEP_SUMMARY"
