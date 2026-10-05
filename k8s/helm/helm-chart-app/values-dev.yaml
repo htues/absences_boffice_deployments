@@ -3,7 +3,7 @@ global:
 
 backend:
   image:
-    repository: htues/absencesbobe
+    repository: hftamayo/absencesbobe
     # this is a fallback value
     tag: "bedev"
   # Non-sensitive runtime setup overrides
@@ -15,18 +15,18 @@ backend:
 
 frontend:
   image:
-    repository: htues/absencesbofe
+    repository: hftamayo/absencesbofe
     # this is a fallback value
     tag: "fedev"
 
 database:
   image:
-    repository: htues/pgdevelopment
+    repository: hftamayo/pgdevelopment
     tag: "dbdev"
 
 nginx:
   image:
-    repository: htues/nginxk8s
+    repository: hftamayo/nginxk8s
     tag: "nginxdev"
 
   upstreams:
