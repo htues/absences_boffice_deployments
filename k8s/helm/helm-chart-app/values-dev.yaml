@@ -3,7 +3,7 @@ global:
 
 backend:
   image:
-    repository: hftamayo/absencesbobe
+    repository: htues/absencesbobe
     tag: "bedev"
   # Non-sensitive runtime setup overrides
   executionMode: "development"
@@ -14,17 +14,17 @@ backend:
 
 frontend:
   image:
-    repository: hftamayo/absencesbofe
+    repository: htues/absencesbofe
     tag: "fedev"
 
 database:
   image:
-    repository: hftamayo/pgdevelopment
+    repository: htues/pgdevelopment
     tag: "dbdev"
 
 nginx:
   image:
-    repository: hftamayo/nginxk8s
+    repository: htues/nginxk8s
     tag: "nginxdev"
 
   upstreams:
