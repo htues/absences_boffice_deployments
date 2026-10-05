@@ -9,7 +9,7 @@ global:
 database:
   enabled: true
   image:
-    repository: htues/absencesbotools
+    repository: hftamayo/pgdevelopment
     pullPolicy: IfNotPresent
   deployment:
     replicas: 1
@@ -60,7 +60,7 @@ database:
 backend:
   enabled: true
   image:
-    repository: htues/absences_boffice_backend
+    repository: hftamayo/absencesbobe
     pullPolicy: IfNotPresent
   deployment:
     replicas: 1
@@ -91,7 +91,7 @@ frontend:
   host: 0.0.0.0
   port: 8041
   image:
-    repository: htues/absences_boffice_frontend
+    repository: hftamayo/absencesbofe
     pullPolicy: IfNotPresent
   deployment:
     replicas: 1
@@ -112,7 +112,7 @@ frontend:
 nginx:
   enabled: false
   image:
-    repository: htues/absencesbotools
+    repository: hftamayo/nginxk8s
     pullPolicy: IfNotPresent
   deployment:
     replicas: 1
