@@ -29,12 +29,6 @@ on:
         type: string
         default: ""
 
-      database_image_tag:
-        description: "Database image tag to deploy"
-        required: false
-        type: string
-        default: ""
-
 permissions:
   contents: read
   id-token: write
