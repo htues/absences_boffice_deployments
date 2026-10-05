@@ -30,7 +30,7 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
@@ -68,7 +68,6 @@ jobs:
       environment: ${{ inputs.environment }}
       backend_image_tag: ${{ inputs.backend_image_tag }}
       frontend_image_tag: ${{ inputs.frontend_image_tag }}
-      database_image_tag: ${{ inputs.database_image_tag }}
     secrets: inherit
 
   bootstrap-summary:
