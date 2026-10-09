@@ -1,4 +1,0 @@
-database:
-  image:
-    repository: hftamayo/pgdevelopment
-    tag: "dbdev"

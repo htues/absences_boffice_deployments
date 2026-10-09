@@ -1,5 +1,6 @@
 global:
   environment: dev
+
 database:
   image:
     repository: hftamayo/pgdevelopment
