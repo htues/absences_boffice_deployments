@@ -1,0 +1,5 @@
+frontend:
+  image:
+    repository: hftamayo/absencesbofe
+    # this is a fallback value
+    tag: "fedev"

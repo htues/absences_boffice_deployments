@@ -1,24 +1,6 @@
 global:
   environment: dev
 
-backend:
-  image:
-    repository: hftamayo/absencesbobe
-    # this is a fallback value
-    tag: "bedev"
-  # Non-sensitive runtime setup overrides
-  executionMode: "development"
-  frontendOrigins:
-    - http://localhost
-    - http://localhost:8041
-    - https://dev.tamayo.dev/absencesbo
-
-frontend:
-  image:
-    repository: hftamayo/absencesbofe
-    # this is a fallback value
-    tag: "fedev"
-
 database:
   image:
     repository: hftamayo/pgdevelopment
