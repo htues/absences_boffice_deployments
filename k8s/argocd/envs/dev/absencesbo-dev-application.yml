@@ -17,6 +17,8 @@ spec:
       releaseName: absencesbo
       valueFiles:
         - values-dev.yaml
+        - values-dev-be.yaml
+        - values-dev-fe.yaml
 
   destination:
     server: https://kubernetes.default.svc
