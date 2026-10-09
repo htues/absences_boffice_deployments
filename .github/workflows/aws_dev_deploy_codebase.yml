@@ -168,9 +168,8 @@ jobs:
             --namespace absencesbo-dev \
             --values "${HELM_CHART_DIR}/values-dev.yaml" \
             --values "${HELM_CHART_DIR}/values-dev-be.yaml" \
-            --values "${HELM_CHART_DIR}/values-dev-fe.yaml" \          
-            > /tmp/absencesbo-dev-rendered.yaml
-
+            --values "${HELM_CHART_DIR}/values-dev-fe.yaml" > /tmp/absencesbo-dev-rendered.yaml
+          
           echo "Rendered manifest line count:"
           wc -l /tmp/absencesbo-dev-rendered.yaml
 
